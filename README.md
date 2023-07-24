@@ -1,5 +1,10 @@
 # eduOS-rs - A teaching operating system written in Rust
 
+## Note
+This is a fork of [eduOS-rs][commit], which gets modified to support AHCI for my bachelor thesis at the Heinrich Heine Universtät in Düsseldorf, Germany.
+
+[commit]: https://github.com/RWTH-OS/eduOS-rs/tree/daee4e2bb49cd7609595bdf05c99550a8fad01cb
+
 ## Introduction
 
 <p align="center"><img src="/img/demo.gif?raw=true"/></p>
