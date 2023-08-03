@@ -1,10 +1,13 @@
+// EDIT
+
 /// Print formatted text to our console.
 ///
 /// From http://blog.phil-opp.com/rust-os/printing-to-screen.html, but tweaked
 /// to work with our APIs.
 #[macro_export]
-macro_rules! print {
-	($($arg:tt)*) => ({
+macro_rules! serial_print
+{
+	($($arg:tt)+) => ({
 		use core::fmt::Write;
 		$crate::console::CONSOLE.lock().write_fmt(format_args!($($arg)*)).unwrap();
 	});
@@ -14,9 +17,42 @@ macro_rules! print {
 ///
 /// From https://doc.rust-lang.org/nightly/std/macro.println!.html
 #[macro_export]
-macro_rules! println {
-	($fmt:expr) => (print!(concat!($fmt, "\n")));
-	($fmt:expr, $($arg:tt)*) => (print!(concat!($fmt, "\n"), $($arg)*));
+macro_rules! serial_println
+{
+	() => ($crate::macros::serial_print!("\n"));
+	($fmt:expr) => ($crate::macros::serial_print!(concat!($fmt, "\n")));
+	($fmt:expr, $($arg:tt)*) => ($crate::macros::serial_print!(concat!($fmt, "\n"), $($arg)*));
+}
+
+#[macro_export]
+macro_rules! vga_print
+{
+	($($arg:tt)+) => ();
+}
+
+#[macro_export]
+macro_rules! vga_println
+{
+	() => ($crate::macros::vga_print!("\n"));
+	($fmt:expr) => ($crate::macros::vga_print(concat!($fmt, "\n")));
+	($fmt:expr, $($arg:tt)*) => ($crate::macros::vga_print(concat!($fmt, "\n"), $($arg)*));
+}
+
+#[macro_export]
+macro_rules! print
+{
+	($($arg:tt)+) => ({
+		use core::fmt::Write;
+		$crate::console::CONSOLE.lock().write_fmt(format_args!($($arg)*)).unwrap();
+	});
+}
+
+#[macro_export]
+macro_rules! println
+{
+	() => ($crate::print!("\n"));
+	($fmt:expr) => ($crate::print!(concat!($fmt, "\n")));
+	($fmt:expr, $($arg:tt)*) => ($crate::print!(concat!($fmt, "\n"), $($arg)*));
 }
 
 macro_rules! align_down {
