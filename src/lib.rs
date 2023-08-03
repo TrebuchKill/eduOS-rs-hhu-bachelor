@@ -1,3 +1,5 @@
+// EDIT
+
 #![feature(lang_items)]
 #![feature(asm_const)]
 #![feature(const_mut_refs)]
@@ -33,6 +35,7 @@ pub mod logging;
 pub mod arch;
 pub mod collections;
 pub mod console;
+pub mod vga;
 pub mod consts;
 pub mod errno;
 pub mod fs;
