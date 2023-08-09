@@ -44,6 +44,9 @@ pub mod scheduler;
 pub mod synch;
 pub mod syscall;
 
+pub mod ahci;
+pub mod pci;
+
 // Using the Simple Chunk Allocator for heap managment of the kernel
 // see
 const CHUNK_SIZE: usize = 256;
