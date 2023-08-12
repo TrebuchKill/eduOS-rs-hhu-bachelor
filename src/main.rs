@@ -16,7 +16,7 @@ use eduos_rs::arch::load_application;
 use eduos_rs::fs;
 use eduos_rs::mm;
 use eduos_rs::scheduler;
-use eduos_rs::scheduler::task::NORMAL_PRIORITY;
+use eduos_rs::scheduler::task::{ LOW_PRIORITY, NORMAL_PRIORITY };
 use eduos_rs::{LogLevel, LOGGER};
 
 extern "C" fn create_user_foo() {
@@ -55,6 +55,7 @@ pub extern "C" fn main() -> ! {
 		scheduler::spawn(foo, NORMAL_PRIORITY).unwrap();
 	}
 	scheduler::spawn(create_user_foo, NORMAL_PRIORITY).unwrap();
+	scheduler::spawn(eduos_rs::test_c, LOW_PRIORITY).unwrap();
 
 	// enable interrupts => enable preemptive multitasking
 	arch::irq::irq_enable();

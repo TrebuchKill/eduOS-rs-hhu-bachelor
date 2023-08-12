@@ -60,6 +60,38 @@ static mut HEAP_BITMAP: PageAligned<[u8; CHUNK_AMOUNT / 8]> = heap_bitmap!(chunk
 static ALLOCATOR: GlobalChunkAllocator =
 	unsafe { GlobalChunkAllocator::new(HEAP.deref_mut_const(), HEAP_BITMAP.deref_mut_const()) };
 
+pub extern "C" fn test_c()
+{
+	test()
+}
+
+pub fn test()
+{
+	let devices = pci::scan_bus();
+	println!("Found {} PCI Devices", devices.len());
+	for device in &devices
+	{
+		if device.get_class() == 0x01
+		{
+			if device.get_subclass() == 0x06
+			{
+				if device.get_programming_interface() == 0x01
+				{
+					println!("AHCI Device!");
+				}
+				else
+				{
+					println!("SATA Controller!");
+				}
+			}
+			else
+			{
+				println!("Mass Storage!");
+			}
+		}
+	}
+}
+
 /// This function is called on panic.
 #[cfg(not(test))]
 #[panic_handler]

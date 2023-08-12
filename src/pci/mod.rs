@@ -39,7 +39,7 @@ impl DataType for u8
     {
         let read = u32::read(bus, device, func, offset);
 
-        match offset & 0xff
+        match offset & 0x03
         {
             0 => (read & 0x00_00_00_ff) as u8,
             1 => ((read & 0x00_00ff_00) >> 8) as u8,
@@ -61,7 +61,7 @@ impl DataType for u16
     {
         let read = u32::read(bus, device, func, offset);
 
-        match offset & 0xff
+        match offset & 0x03
         {
             0 => (read & 0x00_00_ff_ff) as u16,
             2 => ((read & 0xff_ff_00_00) >> 16) as u16,
@@ -104,28 +104,9 @@ impl DataType for u32
     }
 }
 
-macro_rules! define_device
+macro_rules! define_device_types
 {
-    ($($name:ident),*) => {
-
-        #[derive(Debug)]
-        pub enum HeaderType
-        {
-            $($name),*
-        }
-
-        impl core::fmt::Display for HeaderType
-        {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-            {
-                use HeaderType::*;
-                match *self
-                {
-                    $($name => write!(f, "{}", stringify!($name))),*
-                }
-            }
-        }
-
+    ($($name:ident),+) => {
         $(
             #[derive(Clone, Copy, Debug)]
             pub struct $name
@@ -143,18 +124,138 @@ macro_rules! define_device
 
                 pub fn new(bus: u8, device: u8) -> Option<Self>
                 {
-                    None
+                    let dev = unsafe { Self::new_unchecked(bus, device) };
+                    if dev.get_vendor_id() != 0xff_ffu16
+                    {
+                        Some(dev)
+                    }
+                    else
+                    {
+                        None
+                    }
+                }
+
+                pub fn get_vendor_id(&self) -> u16
+                {
+                    u16::read(self.bus, self.device, 0, 0x00)
+                }
+
+                pub fn get_device_id(&self) -> u16
+                {
+                    u16::read(self.bus, self.device, 0, 0x02)
+                }
+
+                // TODO: Command Type?
+                pub fn get_command(&self) -> u16
+                {
+                    u16::read(self.bus, self.device, 0, 0x04)
+                }
+
+                pub fn get_status(&self) -> u16
+                {
+                    u16::read(self.bus, self.device, 0, 0x06)
+                }
+
+                pub fn get_revision_id(&self) -> u8
+                {
+                    u8::read(self.bus, self.device, 0, 0x08)
+                }
+
+                pub fn get_programming_interface(&self) -> u8
+                {
+                    u8::read(self.bus, self.device, 0, 0x09)
+                }
+
+                pub fn get_subclass(&self) -> u8
+                {
+                    u8::read(self.bus, self.device, 0, 0x0a)
+                }
+
+                pub fn get_class(&self) -> u8
+                {
+                    u8::read(self.bus, self.device, 0, 0x0b)
+                }
+
+                pub fn get_cache_line_size(&self) -> u8
+                {
+                    u8::read(self.bus, self.device, 0, 0x0c)
+                }
+
+                pub fn get_latency_timer(&self) -> u8
+                {
+                    u8::read(self.bus, self.device, 0, 0x0d)
+                }
+
+                pub fn get_header_type(&self) -> HeaderType
+                {
+                    HeaderType(u8::read(self.bus, self.device, 0, 0x0e))
+                }
+
+                // BIST = Built In Self Test
+                pub fn get_bist(&self) -> u8
+                {
+                    u8::read(self.bus, self.device, 0, 0x0f)
                 }
             }
         )*
+    };
+}
+
+macro_rules! define_device
+{
+    ($common:ident, $($name:ident $id:literal),*) => {
+
+        #[derive(Debug)]
+        pub enum KnownHeaderType
+        {
+            Unknown,
+            $($name),*
+        }
+
+        impl core::fmt::Display for KnownHeaderType
+        {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+            {
+                use KnownHeaderType::*;
+                match *self
+                {
+                    Unknown => write!(f, "Unknown"),
+                    $($name => write!(f, "{}", stringify!($name))),*
+                }
+            }
+        }
+
+        #[repr(transparent)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub struct HeaderType(u8);
+        
+        impl HeaderType
+        {
+            pub fn is_multifunction(self) -> bool
+            {
+                self.0 & 0x80 == 0x80
+            }
+        
+            pub fn get_type(self) -> KnownHeaderType
+            {
+                use KnownHeaderType::*;
+                match self.0 & 0x7f
+                {
+                    $($id => $name,)*
+                    _ => Unknown
+                }
+            }
+        }
+
+        define_device_types!($common, $($name),*);
     }
 }
 
-define_device!(DeviceCommon, DeviceGeneric, DevicePciBridge, DeviceCardBridge);
+define_device!(DeviceCommon, DeviceGeneric 0x0, DevicePciBridge 0x1, DeviceCardBridge 0x2);
 
 impl core::convert::TryInto<DeviceGeneric> for DeviceCommon
 {
-    type Error = HeaderType;
+    type Error = KnownHeaderType;
 
     fn try_into(self) -> Result<DeviceGeneric, Self::Error>
     {
@@ -165,7 +266,7 @@ impl core::convert::TryInto<DeviceGeneric> for DeviceCommon
 
 impl core::convert::TryInto<DevicePciBridge> for DeviceCommon
 {
-    type Error = HeaderType;
+    type Error = KnownHeaderType;
 
     fn try_into(self) -> Result<DevicePciBridge, Self::Error>
     {
@@ -176,7 +277,7 @@ impl core::convert::TryInto<DevicePciBridge> for DeviceCommon
 
 impl core::convert::TryInto<DeviceCardBridge> for DeviceCommon
 {
-    type Error = HeaderType;
+    type Error = KnownHeaderType;
 
     fn try_into(self) -> Result<DeviceCardBridge, Self::Error>
     {
@@ -198,6 +299,20 @@ impl core::convert::TryInto<DeviceCardBridge> for DeviceCommon
     }
 }*/
 
-pub fn scan_bus()
+pub fn scan_bus() -> alloc::vec::Vec<DeviceCommon>
 {
+    let mut devices = alloc::vec::Vec::new();
+    // 8 Bits
+    for bus in 0..=0xffu8
+    {
+        // 5 Bits
+        for dev in 0..=0x1fu8
+        {
+            if let Some(it) = DeviceCommon::new(bus, dev)
+            {
+                devices.push(it)
+            }
+        }
+    }
+    devices
 }
