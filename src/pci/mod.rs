@@ -320,7 +320,7 @@ pub struct PciScanner
 
 impl PciScanner
 {
-    pub fn new() -> Self
+    pub const fn new() -> Self
     {
         PciScanner { bdf: 0 }
     }
