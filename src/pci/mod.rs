@@ -210,6 +210,14 @@ macro_rules! define_device_types
                     u8::read(self.bus, self.device, self.function, 0x0f)
                 }
             }
+
+            impl ::core::fmt::Display for $name
+            {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+                {
+                    write!(f, "({}, {}, {})", self.bus, self.device, self.function)
+                }
+            }
         )*
     };
 }
@@ -218,11 +226,12 @@ macro_rules! define_device
 {
     ($common:ident, $($name:ident $id:literal),*) => {
 
-        #[derive(Debug)]
+        #[derive(Debug, Clone, Copy)]
+        #[repr(u8)]
         pub enum KnownHeaderType
         {
-            Unknown,
-            $($name),*
+            Unknown = 0xff,
+            $($name = $id),*
         }
 
         impl core::fmt::Display for KnownHeaderType
@@ -261,51 +270,38 @@ macro_rules! define_device
         }
 
         define_device_types!($common, $($name),*);
+
+        $(
+            impl ::core::convert::TryFrom<$common> for $name
+            {
+                type Error = KnownHeaderType;
+
+                fn try_from(value: $common) -> Result<Self, Self::Error>
+                {
+                    let typ = value.get_header_type().get_type();
+                    if (typ as u8) == $id
+                    {
+                        Ok(unsafe { Self::new_unchecked(value.bus, value.device, value.function) })
+                    }
+                    else
+                    {
+                        Err(typ)
+                    }
+                }
+            }
+
+            impl ::core::convert::From<$name> for $common
+            {
+                fn from(value: $name) -> Self
+                {
+                    unsafe { Self::new_unchecked(value.bus, value.device, value.function) }
+                }
+            }
+        )+
     }
 }
 
 define_device!(DeviceCommon, DeviceGeneric 0x0, DevicePciBridge 0x1, DeviceCardBridge 0x2);
-
-impl core::fmt::Display for DeviceCommon
-{
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-    {
-        write!(f, "({}, {}, {})", self.bus, self.device, self.function)
-    }
-}
-
-impl core::convert::TryInto<DeviceGeneric> for DeviceCommon
-{
-    type Error = KnownHeaderType;
-
-    fn try_into(self) -> Result<DeviceGeneric, Self::Error>
-    {
-        // Header Type 0x0
-        todo!()
-    }
-}
-
-impl core::convert::TryInto<DevicePciBridge> for DeviceCommon
-{
-    type Error = KnownHeaderType;
-
-    fn try_into(self) -> Result<DevicePciBridge, Self::Error>
-    {
-        // Header Type 0x1
-        todo!()
-    }
-}
-
-impl core::convert::TryInto<DeviceCardBridge> for DeviceCommon
-{
-    type Error = KnownHeaderType;
-
-    fn try_into(self) -> Result<DeviceCardBridge, Self::Error>
-    {
-        // Header Type 0x2
-        todo!()
-    }
-}
 
 #[derive(Debug)]
 pub struct PciScanner

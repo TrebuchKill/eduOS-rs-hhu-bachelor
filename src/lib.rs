@@ -67,9 +67,11 @@ pub extern "C" fn test_c()
 
 pub fn test()
 {
+	use core::convert::TryFrom;
+
 	let devices = pci::scan_bus();
 	println!("Found {} PCI Devices", devices.len());
-	for device in &devices
+	for device in devices
 	{
 		print!("Type: {}", device.get_header_type().get_type());
 		if device.get_class() == 0x01
@@ -90,6 +92,15 @@ pub fn test()
 				print!(" Mass Storage {}!", device);
 			}
 		}
+		
+		print!("({}, {}, {})",
+			if let Ok(_) = pci::DeviceGeneric::try_from(device)
+			{ "+" } else { "-" },
+			if let Ok(_) = pci::DevicePciBridge::try_from(device)
+			{ "+" } else { "-" },
+			if let Ok(_) = pci::DeviceCardBridge::try_from(device)
+			{ "+" } else { "-" }
+		);
 		println!();
 	}
 }
