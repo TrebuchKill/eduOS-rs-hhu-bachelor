@@ -4,8 +4,8 @@
 
 // https://wiki.osdev.org/Pci
 
-const ConfigAddress: u16 = 0x0c_f8;
-const ConfigData:    u16 = 0x0c_fc;
+const CONFIG_ADDRESS: u16 = 0x0c_f8;
+const CONFIG_DATA:    u16 = 0x0c_fc;
 
 fn get_address(bus: u8, device: u8, func: u8, offset: u8) -> u32
 {
@@ -51,6 +51,10 @@ impl DataType for u8
 
     fn write(self, bus: u8, device: u8, func: u8, offset: u8)
     {
+        let _ = bus;
+        let _ = device;
+        let _ = func;
+        let _ = offset;
         todo!();
     }
 }
@@ -72,6 +76,10 @@ impl DataType for u16
 
     fn write(self, bus: u8, device: u8, func: u8, offset: u8)
     {
+        let _ = bus;
+        let _ = device;
+        let _ = func;
+        let _ = offset;
         todo!()
     }
 }
@@ -85,10 +93,10 @@ impl DataType for u32
             let interrupt = crate::arch::x86_64::kernel::irq::irq_nested_disable();
             
             // Write the address of the device
-            x86::io::outl(ConfigAddress, get_address(bus, device, func, offset));
+            x86::io::outl(CONFIG_ADDRESS, get_address(bus, device, func, offset));
 
             // Read the value
-            let it = x86::io::inl(ConfigData);
+            let it = x86::io::inl(CONFIG_DATA);
 
             // Re-enable interrupts when nessecarry
             crate::arch::x86_64::kernel::irq::irq_nested_enable(interrupt);
@@ -100,6 +108,10 @@ impl DataType for u32
 
     fn write(self, bus: u8, device: u8, func: u8, offset: u8)
     {
+        let _ = bus;
+        let _ = device;
+        let _ = func;
+        let _ = offset;
         todo!()
     }
 }
@@ -112,19 +124,20 @@ macro_rules! define_device_types
             pub struct $name
             {
                 bus: u8,
-                device: u8
+                device: u8,
+                function: u8,
             }
 
             impl $name
             {
-                pub const unsafe fn new_unchecked(bus: u8, device: u8) -> Self
+                pub const unsafe fn new_unchecked(bus: u8, device: u8, function: u8) -> Self
                 {
-                    Self { bus, device }
+                    Self { bus, device, function }
                 }
 
-                pub fn new(bus: u8, device: u8) -> Option<Self>
+                pub fn new(bus: u8, device: u8, function: u8) -> Option<Self>
                 {
-                    let dev = unsafe { Self::new_unchecked(bus, device) };
+                    let dev = unsafe { Self::new_unchecked(bus, device, function) };
                     if dev.get_vendor_id() != 0xff_ffu16
                     {
                         Some(dev)
@@ -137,64 +150,64 @@ macro_rules! define_device_types
 
                 pub fn get_vendor_id(&self) -> u16
                 {
-                    u16::read(self.bus, self.device, 0, 0x00)
+                    u16::read(self.bus, self.device, self.function, 0x00)
                 }
 
                 pub fn get_device_id(&self) -> u16
                 {
-                    u16::read(self.bus, self.device, 0, 0x02)
+                    u16::read(self.bus, self.device, self.function, 0x02)
                 }
 
                 // TODO: Command Type?
                 pub fn get_command(&self) -> u16
                 {
-                    u16::read(self.bus, self.device, 0, 0x04)
+                    u16::read(self.bus, self.device, self.function, 0x04)
                 }
 
                 pub fn get_status(&self) -> u16
                 {
-                    u16::read(self.bus, self.device, 0, 0x06)
+                    u16::read(self.bus, self.device, self.function, 0x06)
                 }
 
                 pub fn get_revision_id(&self) -> u8
                 {
-                    u8::read(self.bus, self.device, 0, 0x08)
+                    u8::read(self.bus, self.device, self.function, 0x08)
                 }
 
                 pub fn get_programming_interface(&self) -> u8
                 {
-                    u8::read(self.bus, self.device, 0, 0x09)
+                    u8::read(self.bus, self.device, self.function, 0x09)
                 }
 
                 pub fn get_subclass(&self) -> u8
                 {
-                    u8::read(self.bus, self.device, 0, 0x0a)
+                    u8::read(self.bus, self.device, self.function, 0x0a)
                 }
 
                 pub fn get_class(&self) -> u8
                 {
-                    u8::read(self.bus, self.device, 0, 0x0b)
+                    u8::read(self.bus, self.device, self.function, 0x0b)
                 }
 
                 pub fn get_cache_line_size(&self) -> u8
                 {
-                    u8::read(self.bus, self.device, 0, 0x0c)
+                    u8::read(self.bus, self.device, self.function, 0x0c)
                 }
 
                 pub fn get_latency_timer(&self) -> u8
                 {
-                    u8::read(self.bus, self.device, 0, 0x0d)
+                    u8::read(self.bus, self.device, self.function, 0x0d)
                 }
 
                 pub fn get_header_type(&self) -> HeaderType
                 {
-                    HeaderType(u8::read(self.bus, self.device, 0, 0x0e))
+                    HeaderType(u8::read(self.bus, self.device, self.function, 0x0e))
                 }
 
                 // BIST = Built In Self Test
                 pub fn get_bist(&self) -> u8
                 {
-                    u8::read(self.bus, self.device, 0, 0x0f)
+                    u8::read(self.bus, self.device, self.function, 0x0f)
                 }
             }
         )*
@@ -253,6 +266,14 @@ macro_rules! define_device
 
 define_device!(DeviceCommon, DeviceGeneric 0x0, DevicePciBridge 0x1, DeviceCardBridge 0x2);
 
+impl core::fmt::Display for DeviceCommon
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+    {
+        write!(f, "({}, {}, {})", self.bus, self.device, self.function)
+    }
+}
+
 impl core::convert::TryInto<DeviceGeneric> for DeviceCommon
 {
     type Error = KnownHeaderType;
@@ -286,33 +307,79 @@ impl core::convert::TryInto<DeviceCardBridge> for DeviceCommon
     }
 }
 
-/*impl DeviceCommon
+#[derive(Debug)]
+pub struct PciScanner
 {
-    pub const unsafe fn new_unchecked(bus: u8, device: u8) -> Self
+    // Not what I had in mind originally, but it worked out at the end
+    // If any of the high value 16 bits are set, we are done
+    // the high byte of the low 16 bits are the Bus
+    // the highest 5 bits of the lowest byte are the Device number
+    // the remaining lowest 3 bits are the Function
+    bdf: u32
+}
+
+impl PciScanner
+{
+    pub fn new() -> Self
     {
-        Self{ bus, device }
+        PciScanner { bdf: 0 }
     }
 
-    pub fn new(bus: u8, device: u8) -> Self
+    fn increment(&mut self, multi_function: bool) // -> bool
     {
-        todo!()
-    }
-}*/
-
-pub fn scan_bus() -> alloc::vec::Vec<DeviceCommon>
-{
-    let mut devices = alloc::vec::Vec::new();
-    // 8 Bits
-    for bus in 0..=0xffu8
-    {
-        // 5 Bits
-        for dev in 0..=0x1fu8
+        if multi_function
         {
-            if let Some(it) = DeviceCommon::new(bus, dev)
+            self.bdf += 1;
+        }
+        else
+        {
+            self.bdf = (self.bdf + 0x08) & 0xff_ff_ff_f8;
+        }
+    }
+
+    pub fn bus(&self) -> u8
+    {
+        ((self.bdf & 0x00_00_ff_00) >> 8) as u8
+    }
+
+    pub fn device(&self) -> u8
+    {
+        ((self.bdf & 0x00_00_00_f8) >> 3) as u8
+    }
+
+    pub fn function(&self) -> u8
+    {
+        (self.bdf & 0x7) as u8
+    }
+}
+
+impl Iterator for PciScanner
+{
+    type Item = DeviceCommon;
+
+    fn next(&mut self) -> Option<Self::Item>
+    {
+        loop
+        {
+            if self.bdf > 0x00_00_ff_ff
             {
-                devices.push(it)
+                return None;
+            }
+            let mf = self.function() > 0;
+            if let Some(it) = DeviceCommon::new(self.bus(), self.device(), self.function())
+            {
+                self.increment(mf || it.get_header_type().is_multifunction());
+                return Some(it);
+            }
+            else
+            {
+                self.increment(mf);
             }
         }
     }
-    devices
+}
+
+pub fn scan_bus() -> alloc::vec::Vec<DeviceCommon>
+{
+    PciScanner::new().collect()
 }

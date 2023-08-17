@@ -71,24 +71,26 @@ pub fn test()
 	println!("Found {} PCI Devices", devices.len());
 	for device in &devices
 	{
+		print!("Type: {}", device.get_header_type().get_type());
 		if device.get_class() == 0x01
 		{
 			if device.get_subclass() == 0x06
 			{
 				if device.get_programming_interface() == 0x01
 				{
-					println!("AHCI Device!");
+					print!(" AHCI Device {}!", device);
 				}
 				else
 				{
-					println!("SATA Controller!");
+					print!(" SATA Controller {}!", device);
 				}
 			}
 			else
 			{
-				println!("Mass Storage!");
+				print!(" Mass Storage {}!", device);
 			}
 		}
+		println!();
 	}
 }
 
