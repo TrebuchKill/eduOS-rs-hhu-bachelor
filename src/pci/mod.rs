@@ -4,6 +4,8 @@
 
 // https://wiki.osdev.org/Pci
 
+use crate::synch::spinlock::{SpinlockIrqSave, SpinlockIrqSaveGuard};
+
 const CONFIG_ADDRESS: u16 = 0x0c_f8;
 const CONFIG_DATA:    u16 = 0x0c_fc;
 
@@ -16,8 +18,8 @@ fn get_address(bus: u8, device: u8, func: u8, offset: u8) -> u32
     // const FUNCTION:  u32 = 0x00_00_07_00;
     const OFFSET:    u32 = 0x00_00_00_fc;
 
-    assert_eq!(device & 0x1f, device); // Are only the 5 least significant bits set?
-    assert_eq!(func   & 0x07, func);   // Are only the 3 least significant bits set?
+    // assert_eq!(device & 0x1f, device); // Are only the 5 least significant bits set?
+    // assert_eq!(func   & 0x07, func);   // Are only the 3 least significant bits set?
 
     let bus = bus as u32;
     let dev = device as u32;
@@ -25,6 +27,34 @@ fn get_address(bus: u8, device: u8, func: u8, offset: u8) -> u32
     let off = offset as u32;
 
     ENABLE_BIT | (bus << 16) | (dev << 11) | (fun << 8) | (off & OFFSET)
+}
+
+static PCI_LOCK: SpinlockIrqSave<()> = SpinlockIrqSave::new(());
+
+fn read<'a>(guard: SpinlockIrqSaveGuard<'a, ()>, bus: u8, device: u8, func: u8, offset: u8)
+    -> (SpinlockIrqSaveGuard<'a, ()>, u32)
+{
+    unsafe
+    {
+        // Write the address of the device
+        x86::io::outl(CONFIG_ADDRESS, get_address(bus, device, func, offset));
+
+        // Read the value
+        let it = x86::io::inl(CONFIG_DATA);
+
+        (guard, it)
+    }
+}
+
+fn write<'a>(guard: SpinlockIrqSaveGuard<'a, ()>, bus: u8, device: u8, func: u8, offset: u8, value: u32)
+    -> SpinlockIrqSaveGuard<'a, ()>
+{
+    unsafe
+    {
+        x86::io::outl(CONFIG_ADDRESS, get_address(bus, device, func, offset));
+        x86::io::outl(CONFIG_DATA, value);
+    }
+    guard
 }
 
 trait DataType: Copy
@@ -37,7 +67,8 @@ impl DataType for u8
 {
     fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
     {
-        let read = u32::read(bus, device, func, offset);
+        // let read = u32::read(bus, device, func, offset);
+        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
 
         match offset & 0x03
         {
@@ -63,7 +94,8 @@ impl DataType for u16
 {
     fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
     {
-        let read = u32::read(bus, device, func, offset);
+        //let read = u32::read(bus, device, func, offset);
+        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
 
         match offset & 0x03
         {
@@ -88,31 +120,13 @@ impl DataType for u32
 {
     fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
     {
-        unsafe {
-            // Disable interrupts
-            let interrupt = crate::arch::x86_64::kernel::irq::irq_nested_disable();
-            
-            // Write the address of the device
-            x86::io::outl(CONFIG_ADDRESS, get_address(bus, device, func, offset));
-
-            // Read the value
-            let it = x86::io::inl(CONFIG_DATA);
-
-            // Re-enable interrupts when nessecarry
-            crate::arch::x86_64::kernel::irq::irq_nested_enable(interrupt);
-
-            // return value
-            it
-        }
+        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
+        read
     }
 
     fn write(self, bus: u8, device: u8, func: u8, offset: u8)
     {
-        let _ = bus;
-        let _ = device;
-        let _ = func;
-        let _ = offset;
-        todo!()
+        let _ = write(PCI_LOCK.lock(), bus, device, func, offset, self);
     }
 }
 
