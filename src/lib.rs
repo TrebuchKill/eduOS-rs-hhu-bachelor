@@ -67,41 +67,20 @@ pub extern "C" fn test_c()
 
 pub fn test()
 {
-	use core::convert::TryFrom;
+	use alloc::vec::Vec;
 
 	let devices = pci::scan_bus();
-	println!("Found {} PCI Devices", devices.len());
-	for device in devices
+	println!("Found {} PCI Device(s)", devices.len());
+	let ahci_devices = devices.into_iter().filter(|it| ahci::is_ahci_device(it.as_common_header())).collect::<Vec<_>>();
+	println!("Found {} AHCI Device(s)", ahci_devices.len());
+	for dev in &ahci_devices
 	{
-		print!("Type: {}", device.get_header_type().get_type());
-		if device.get_class() == 0x01
+		let dev = match dev
 		{
-			if device.get_subclass() == 0x06
-			{
-				if device.get_programming_interface() == 0x01
-				{
-					print!(" AHCI Device {}!", device);
-				}
-				else
-				{
-					print!(" SATA Controller {}!", device);
-				}
-			}
-			else
-			{
-				print!(" Mass Storage {}!", device);
-			}
-		}
-		
-		print!("({}, {}, {})",
-			if let Ok(_) = pci::DeviceGeneric::try_from(device)
-			{ "+" } else { "-" },
-			if let Ok(_) = pci::DevicePciBridge::try_from(device)
-			{ "+" } else { "-" },
-			if let Ok(_) = pci::DeviceCardBridge::try_from(device)
-			{ "+" } else { "-" }
-		);
-		println!();
+			pci::devices::AnyDevice::Generic(it) => it,
+			_ => panic!("AHCI Device was not generic!")
+		};
+		ahci::init_device(dev);
 	}
 }
 

@@ -57,265 +57,95 @@ fn write<'a>(guard: SpinlockIrqSaveGuard<'a, ()>, bus: u8, device: u8, func: u8,
     guard
 }
 
-trait DataType: Copy
+mod iotypes;
+use iotypes::DataType;
+
+pub mod devices;
+
+#[derive(Debug)]
+pub struct BarValue(u32);
+#[derive(Debug)]
+pub struct MemSpaceBarValue(u32);
+#[derive(Debug)]
+pub struct IoSpaceBarValue(u32);
+
+#[derive(Clone, Copy, Debug)]
+pub enum MemSpaceType
 {
-    fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self;
-    fn write(self, bus: u8, device: u8, func: u8, offset: u8);
+    Bits32    = 0x0,
+    Reserved  = 0x1,
+    Bits64    = 0x2,
+    Undefined = 0x3
 }
 
-impl DataType for u8
+impl MemSpaceBarValue
 {
-    fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
+    pub fn typ(&self) -> MemSpaceType
     {
-        // let read = u32::read(bus, device, func, offset);
-        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
-
-        match offset & 0x03
+        use MemSpaceType::*;
+        match (self.0 & 6) >> 1
         {
-            0 => (read & 0x00_00_00_ff) as u8,
-            1 => ((read & 0x00_00ff_00) >> 8) as u8,
-            2 => ((read & 0x00_ff_00_00) >> 16) as u8,
-            3 => ((read & 0xff_00_00_00) >> 24) as u8,
-            _ => panic!("Illegal Value")
+            0 => Bits32,
+            2 => Bits64,
+            1 => Reserved,
+            3 => Undefined,
+            _ => unreachable!()
         }
     }
 
-    fn write(self, bus: u8, device: u8, func: u8, offset: u8)
+    pub fn is_prefetchable(&self) -> bool
     {
-        let _ = bus;
-        let _ = device;
-        let _ = func;
-        let _ = offset;
-        todo!();
+        self.0 & 8 == 8
+    }
+
+    // Does not handle Bits64
+    pub fn address(&self) -> u32
+    {
+        self.0 & 0xff_ff_ff_f0
     }
 }
 
-impl DataType for u16
+impl IoSpaceBarValue
 {
-    fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
+    pub fn address(&self) -> u32
     {
-        //let read = u32::read(bus, device, func, offset);
-        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
+        self.0 & 0xff_ff_ff_fc
+    }
+}
 
-        match offset & 0x03
+impl core::convert::TryFrom<BarValue> for MemSpaceBarValue
+{
+    type Error = &'static str;
+
+    fn try_from(value: BarValue) -> Result<Self, Self::Error>
+    {
+        if value.0 & 1 != 0
         {
-            0 => (read & 0x00_00_ff_ff) as u16,
-            2 => ((read & 0xff_ff_00_00) >> 16) as u16,
-            1 | 3 => panic!("Offset must be 16 bits aligned"),
-            _ => panic!("Illegal Value")
+            Err("BarValue has not the right format")
+        }
+        else
+        {
+            Ok(MemSpaceBarValue(value.0))
         }
     }
-
-    fn write(self, bus: u8, device: u8, func: u8, offset: u8)
-    {
-        let _ = bus;
-        let _ = device;
-        let _ = func;
-        let _ = offset;
-        todo!()
-    }
 }
 
-impl DataType for u32
+impl core::convert::TryFrom<BarValue> for IoSpaceBarValue
 {
-    fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
+    type Error = &'static str;
+
+    fn try_from(value: BarValue) -> Result<Self, Self::Error>
     {
-        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
-        read
-    }
-
-    fn write(self, bus: u8, device: u8, func: u8, offset: u8)
-    {
-        let _ = write(PCI_LOCK.lock(), bus, device, func, offset, self);
-    }
-}
-
-macro_rules! define_device_types
-{
-    ($($name:ident),+) => {
-        $(
-            #[derive(Clone, Copy, Debug)]
-            pub struct $name
-            {
-                bus: u8,
-                device: u8,
-                function: u8,
-            }
-
-            impl $name
-            {
-                pub const unsafe fn new_unchecked(bus: u8, device: u8, function: u8) -> Self
-                {
-                    Self { bus, device, function }
-                }
-
-                pub fn new(bus: u8, device: u8, function: u8) -> Option<Self>
-                {
-                    let dev = unsafe { Self::new_unchecked(bus, device, function) };
-                    if dev.get_vendor_id() != 0xff_ffu16
-                    {
-                        Some(dev)
-                    }
-                    else
-                    {
-                        None
-                    }
-                }
-
-                pub fn get_vendor_id(&self) -> u16
-                {
-                    u16::read(self.bus, self.device, self.function, 0x00)
-                }
-
-                pub fn get_device_id(&self) -> u16
-                {
-                    u16::read(self.bus, self.device, self.function, 0x02)
-                }
-
-                // TODO: Command Type?
-                pub fn get_command(&self) -> u16
-                {
-                    u16::read(self.bus, self.device, self.function, 0x04)
-                }
-
-                pub fn get_status(&self) -> u16
-                {
-                    u16::read(self.bus, self.device, self.function, 0x06)
-                }
-
-                pub fn get_revision_id(&self) -> u8
-                {
-                    u8::read(self.bus, self.device, self.function, 0x08)
-                }
-
-                pub fn get_programming_interface(&self) -> u8
-                {
-                    u8::read(self.bus, self.device, self.function, 0x09)
-                }
-
-                pub fn get_subclass(&self) -> u8
-                {
-                    u8::read(self.bus, self.device, self.function, 0x0a)
-                }
-
-                pub fn get_class(&self) -> u8
-                {
-                    u8::read(self.bus, self.device, self.function, 0x0b)
-                }
-
-                pub fn get_cache_line_size(&self) -> u8
-                {
-                    u8::read(self.bus, self.device, self.function, 0x0c)
-                }
-
-                pub fn get_latency_timer(&self) -> u8
-                {
-                    u8::read(self.bus, self.device, self.function, 0x0d)
-                }
-
-                pub fn get_header_type(&self) -> HeaderType
-                {
-                    HeaderType(u8::read(self.bus, self.device, self.function, 0x0e))
-                }
-
-                // BIST = Built In Self Test
-                pub fn get_bist(&self) -> u8
-                {
-                    u8::read(self.bus, self.device, self.function, 0x0f)
-                }
-            }
-
-            impl ::core::fmt::Display for $name
-            {
-                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-                {
-                    write!(f, "({}, {}, {})", self.bus, self.device, self.function)
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! define_device
-{
-    ($common:ident, $($name:ident $id:literal),*) => {
-
-        #[derive(Debug, Clone, Copy)]
-        #[repr(u8)]
-        pub enum KnownHeaderType
+        if value.0 & 1 != 1
         {
-            Unknown = 0xff,
-            $($name = $id),*
+            Err("BarValue has not the right format")
         }
-
-        impl core::fmt::Display for KnownHeaderType
+        else
         {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-            {
-                use KnownHeaderType::*;
-                match *self
-                {
-                    Unknown => write!(f, "Unknown"),
-                    $($name => write!(f, "{}", stringify!($name))),*
-                }
-            }
+            Ok(IoSpaceBarValue(value.0))
         }
-
-        #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct HeaderType(u8);
-        
-        impl HeaderType
-        {
-            pub fn is_multifunction(self) -> bool
-            {
-                self.0 & 0x80 == 0x80
-            }
-        
-            pub fn get_type(self) -> KnownHeaderType
-            {
-                use KnownHeaderType::*;
-                match self.0 & 0x7f
-                {
-                    $($id => $name,)*
-                    _ => Unknown
-                }
-            }
-        }
-
-        define_device_types!($common, $($name),*);
-
-        $(
-            impl ::core::convert::TryFrom<$common> for $name
-            {
-                type Error = KnownHeaderType;
-
-                fn try_from(value: $common) -> Result<Self, Self::Error>
-                {
-                    let typ = value.get_header_type().get_type();
-                    if (typ as u8) == $id
-                    {
-                        Ok(unsafe { Self::new_unchecked(value.bus, value.device, value.function) })
-                    }
-                    else
-                    {
-                        Err(typ)
-                    }
-                }
-            }
-
-            impl ::core::convert::From<$name> for $common
-            {
-                fn from(value: $name) -> Self
-                {
-                    unsafe { Self::new_unchecked(value.bus, value.device, value.function) }
-                }
-            }
-        )+
     }
 }
-
-define_device!(DeviceCommon, DeviceGeneric 0x0, DevicePciBridge 0x1, DeviceCardBridge 0x2);
 
 #[derive(Debug)]
 pub struct PciScanner
@@ -365,7 +195,7 @@ impl PciScanner
 
 impl Iterator for PciScanner
 {
-    type Item = DeviceCommon;
+    type Item = devices::AnyDevice;
 
     fn next(&mut self) -> Option<Self::Item>
     {
@@ -376,9 +206,9 @@ impl Iterator for PciScanner
                 return None;
             }
             let mf = self.function() > 0;
-            if let Some(it) = DeviceCommon::new(self.bus(), self.device(), self.function())
+            if let Some(it) = devices::AnyDevice::new(self.bus(), self.device(), self.function())
             {
-                self.increment(mf || it.get_header_type().is_multifunction());
+                self.increment(mf || it.as_common_header().get_header_type().is_multifunction());
                 return Some(it);
             }
             else
@@ -389,7 +219,7 @@ impl Iterator for PciScanner
     }
 }
 
-pub fn scan_bus() -> alloc::vec::Vec<DeviceCommon>
+pub fn scan_bus() -> alloc::vec::Vec<devices::AnyDevice>
 {
     PciScanner::new().collect()
 }
