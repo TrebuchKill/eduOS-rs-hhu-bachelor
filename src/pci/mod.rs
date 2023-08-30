@@ -62,11 +62,11 @@ use iotypes::DataType;
 
 pub mod devices;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BarValue(u32);
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemSpaceBarValue(u32);
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoSpaceBarValue(u32);
 
 #[derive(Clone, Copy, Debug)]

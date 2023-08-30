@@ -3,7 +3,10 @@ mod generic;
 mod pci_bridge;
 mod card_bridge;
 
-use super::DataType;
+use super::iotypes::{
+    DataType,
+    Command
+};
 
 pub use generic::Generic;
 pub use pci_bridge::PciBridge;
@@ -37,7 +40,8 @@ pub trait CommonHeader
 {
     fn get_vendor_id(&self) -> u16;
     fn get_device_id(&self) -> u16;
-    fn get_command(&self) -> u16;
+    fn get_command(&self) -> Command;
+    fn set_command(&self, value: Command);
     fn get_status(&self) -> u16;
     fn get_revision_id(&self) -> u8;
     fn get_programming_interface(&self) -> u8;
@@ -61,9 +65,14 @@ impl<T: Device> CommonHeader for T
         u16::read(self.get_bus(), self.get_device(), self.get_function(), 0x02)
     }
 
-    default fn get_command(&self) -> u16
+    default fn get_command(&self) -> Command
     {
-        u16::read(self.get_bus(), self.get_device(), self.get_function(), 0x04)
+        Command::read(self.get_bus(), self.get_device(), self.get_function(), 0x04)
+    }
+
+    default fn set_command(&self, value: Command)
+    {
+        value.write(self.get_bus(), self.get_device(), self.get_function(), 0x04);
     }
 
     default fn get_status(&self) -> u16
@@ -149,3 +158,41 @@ impl AnyDevice
         }
     }
 }
+
+// What about AsRef<CommonHeader> for AnyDevice?
+
+/*impl Device for AnyDevice
+{
+    fn get_bus(&self) -> u8
+    {
+        use AnyDevice::*;
+        match self
+        {
+            Generic(it) => it.get_bus(),
+            PciBridge(it) => it.get_bus(),
+            CardBridge(it) => it.get_bus()
+        }
+    }
+
+    fn get_device(&self) -> u8
+    {
+        use AnyDevice::*;
+        match self
+        {
+            Generic(it) => it.get_device(),
+            PciBridge(it) => it.get_device(),
+            CardBridge(it) => it.get_device()
+        }
+    }
+
+    fn get_function(&self) -> u8
+    {
+        use AnyDevice::*;
+        match self
+        {
+            Generic(it) => it.get_function(),
+            PciBridge(it) => it.get_function(),
+            CardBridge(it) => it.get_function()
+        }
+    }
+}*/
