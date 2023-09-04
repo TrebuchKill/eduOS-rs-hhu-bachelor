@@ -72,7 +72,7 @@ pub fn test()
 	let devices = pci::scan_bus();
 	println!("Found {} PCI Device(s)", devices.len());
 	let ahci_devices = devices.into_iter()
-		.filter(|it| ahci::is_ahci_device(it.as_common_header()))
+		.filter(|it| ahci::is_ahci_device(it))
 		.collect::<Vec<_>>();
 	println!("Found {} AHCI Device(s)", ahci_devices.len());
 	for dev in &ahci_devices

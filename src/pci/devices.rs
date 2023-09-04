@@ -128,6 +128,39 @@ pub enum AnyDevice
     CardBridge(CardBridge)
 }
 
+impl Device for AnyDevice
+{
+    fn get_bus(&self) -> u8
+    {
+        match self
+        {
+            AnyDevice::Generic(it) => it.get_bus(),
+            AnyDevice::PciBridge(it) => it.get_bus(),
+            AnyDevice::CardBridge(it) => it.get_bus(),
+        }
+    }
+
+    fn get_device(&self) -> u8
+    {
+        match self
+        {
+            AnyDevice::Generic(it) => it.get_device(),
+            AnyDevice::PciBridge(it) => it.get_device(),
+            AnyDevice::CardBridge(it) => it.get_device(),
+        }
+    }
+
+    fn get_function(&self) -> u8
+    {
+        match self
+        {
+            AnyDevice::Generic(it) => it.get_function(),
+            AnyDevice::PciBridge(it) => it.get_function(),
+            AnyDevice::CardBridge(it) => it.get_function(),
+        }
+    }
+}
+
 impl AnyDevice
 {
     pub(super) fn new(bus: u8, device: u8, function: u8) -> Option<Self>

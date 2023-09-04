@@ -1,7 +1,7 @@
 // NEW
 
 use crate::pci::{devices::{
-    Device,
+    Device as PciDevice,
     CommonHeader,
     Generic as PciGeneric
 }, MemSpaceBarValue, BarValue};
@@ -11,7 +11,34 @@ use core::convert::{
     TryInto
 };
 
-pub fn is_ahci_device(device: &dyn CommonHeader) -> bool
+pub struct AhciDevice(PciGeneric);
+
+impl AhciDevice
+{
+    // Currently this take ownership of PciGeneric (move)
+    // Should I keep it that way?
+    // Or should I switch to a clone/copy?
+    pub fn new(device: PciGeneric) -> Option<Self>
+    {
+        if is_ahci_device(&device)
+        {
+            let ret = AhciDevice(device);
+            ret.init();
+            Some(ret)
+        }
+        else
+        {
+            None
+        }
+    }
+
+    fn init(&self)
+    {
+    }
+}
+
+pub fn is_ahci_device<T>(device: &T) -> bool
+    where T: CommonHeader + ?Sized
 {
     device.get_header_type().get_type() == 0x0
     && device.get_class() == 0x01
