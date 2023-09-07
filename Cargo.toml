@@ -10,7 +10,8 @@ build-command = ["build"]
 # The command invoked with the created bootimage (the "{}" will be replaced
 # with the path to the bootable disk image)
 # Applies to `bootimage run` and `bootimage runner`
-run-command = ["qemu-system-x86_64", "-smp", "1", "-m", "128M", "-serial", "stdio", "-cpu", "qemu64,apic,fsgsbase,rdtscp,xsave,xsaveopt,fxsr", "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-drive", "format=raw,file={}", "--device", "ich9-ahci"]
+# https://stackoverflow.com/questions/48351096/how-to-emulate-a-sata-disk-drive-in-qemu
+run-command = ["qemu-system-x86_64", "-smp", "1", "-m", "128M", "-serial", "stdio", "-cpu", "qemu64,apic,fsgsbase,rdtscp,xsave,xsaveopt,fxsr", "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-drive", "format=raw,file={}", "--device", "ich9-ahci,id=ahci0", "-drive", "id=disk0,file=drive0.qcow,if=none", "-device", "ide-hd,drive=disk0,bus=ahci0.0" ]
 # Additional arguments passed to the run command for non-test executables
 # Applies to `bootimage run` and `bootimage runner`
 run-args = []
