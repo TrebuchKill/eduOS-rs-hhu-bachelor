@@ -9,6 +9,7 @@
 #![feature(naked_functions)]
 #![feature(abi_x86_interrupt)]
 #![feature(specialization)]
+#![feature(ptr_metadata)] // for src/ahci/mod.rs:115 (Line Number might change without being updated here)
 #![no_std]
 
 extern crate alloc;
@@ -72,17 +73,13 @@ pub fn test()
 	let devices = pci::scan_bus();
 	println!("Found {} PCI Device(s)", devices.len());
 	let ahci_devices = devices.into_iter()
-		.filter(|it| ahci::is_ahci_device(it))
+		// .filter(|it| ahci::is_ahci_device(it))
+		.filter_map(|it| ahci::AhciDevice::try_new(it))
 		.collect::<Vec<_>>();
 	println!("Found {} AHCI Device(s)", ahci_devices.len());
 	for dev in &ahci_devices
 	{
-		let dev = match dev
-		{
-			pci::devices::AnyDevice::Generic(it) => it,
-			_ => panic!("AHCI Device was not generic!")
-		};
-		ahci::init_device(dev);
+		dev.debug_print();
 	}
 }
 

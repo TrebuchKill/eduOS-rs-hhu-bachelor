@@ -1,20 +1,44 @@
 // NEW
 
-use crate::pci::{devices::{
-    Device as PciDevice,
-    CommonHeader,
-    Generic as PciGeneric
-}, MemSpaceBarValue, BarValue};
+use crate::{
+    pci::{
+        devices::{
+            Device as PciDevice,
+            CommonHeader,
+            Generic as PciGeneric
+        },
+        MemSpaceBarValue,
+        BarValue
+    },
+    arch::{
+        mm::{
+            paging::{
+                PageTableEntryFlags,
+                unmap,
+                map
+            },
+            virtualmem
+        },
+        BasePageSize
+    }
+};
 
 use core::convert::{
     TryFrom,
     TryInto
 };
 
-pub struct AhciDevice(PciGeneric);
+pub struct AhciDevice
+{
+    device: PciGeneric,
+    // abar: Option<&'a [u8]>
+    abar_vaddr: usize,
+    abar_actual_size: usize
+}
 
 impl AhciDevice
 {
+    // TODO
     // Currently this take ownership of PciGeneric (move)
     // Should I keep it that way?
     // Or should I switch to a clone/copy?
@@ -22,7 +46,11 @@ impl AhciDevice
     {
         if is_ahci_device(&device)
         {
-            let ret = AhciDevice(device);
+            let mut ret = AhciDevice {
+                device,
+                abar_vaddr: 0,
+                abar_actual_size: 0
+            };
             ret.init();
             Some(ret)
         }
@@ -32,8 +60,121 @@ impl AhciDevice
         }
     }
 
-    fn init(&self)
+    // Software may perform an HBA reset prior to initializing the controller by setting GHC.AE to
+    // ‘1’ and then setting GHC.HR to ‘1’ if desired.
+    // Page 104, Chap 10.1.2
+
+    pub fn try_new(device: crate::pci::devices::AnyDevice) -> Option<Self>
     {
+        use crate::pci::devices::AnyDevice;
+        match device
+        {
+            AnyDevice::Generic(dev) => Self::new(dev),
+            _ => None
+        }
+    }
+
+    fn init(&mut self)
+    {
+        // Enable Inte
+        let mut cmd = self.device.get_command();
+        cmd.set_interrupt_disable(false);
+        cmd.set_memory_space(true);
+        cmd.set_bus_master(true);
+        self.device.set_command(cmd);
+
+        let addr = MemSpaceBarValue::try_from(self.device.get_bar_5()).unwrap();
+        let size = self.device.get_bar_5_size();
+        // Like the macro in src/macros.rs
+        let size_page_aligned = (size + 0x0f_ff) & !0x0f_ffu32;
+        debug_assert_eq!(Ok(addr), self.device.get_bar_5().try_into());
+
+        #[cfg(debug_assertions)]
+        println!("({:08x}, {:08x}, {:08x})", addr.address(), size, size_page_aligned);
+
+        let vmem = virtualmem::allocate(size_page_aligned as usize);
+        map::<BasePageSize>(
+            vmem,
+            addr.address() as usize,
+            (size_page_aligned >> 12) as usize, // division by 0x10_00 is the same as right shift by 12, when the lowest 12 bits are 0, which they are, thanks to the alignment
+            PageTableEntryFlags::CACHE_DISABLE
+        );
+        self.abar_vaddr = vmem;
+        self.abar_actual_size = size as usize;
+    }
+
+    fn calc_ports_slice_size(&self) -> usize
+    {
+        // Size of all the data
+        // - the size of the data before the first port
+        let tmp = self.abar_actual_size - 0x01_00;
+        debug_assert_eq!(tmp % 0x80, 0);
+        tmp / 0x80
+    }
+
+    fn get_hba_mem(&self) -> Option<&HbaMemory>
+    {
+        match self.abar_vaddr
+        {
+            0 => None,
+            vmem => unsafe {
+
+                Some(&*core::ptr::from_raw_parts(
+                    vmem as *const (),
+                    self.calc_ports_slice_size()))
+            }
+        }
+    }
+
+    fn get_hba_mem_mut(&mut self) -> Option<&mut HbaMemory>
+    {
+        match self.abar_vaddr
+        {
+            0 => None,
+            vmem => unsafe {
+
+                Some(&mut *core::ptr::from_raw_parts_mut(
+                    vmem as *mut (),
+                    self.calc_ports_slice_size()))
+            }
+        }
+    }
+
+    pub fn debug_print(&self)
+    {
+        let it = self.get_hba_mem().unwrap();
+        /*let ptr = self.abar_vaddr;
+        let it = unsafe { ptr.read_volatile() };*/
+        println!("{}: {:b}", "cap", it.ghc.cap);
+        println!("{}: {:x}", "ghc", it.ghc.ghc);
+        println!("{}: {:x}", "is", it.ghc.is);
+        println!("{}: {:032b}", "pi", it.ghc.pi);
+        println!("{}: {:x}", "vs", it.ghc.vs);
+        println!("{}: {:x}", "ccc_ctl", it.ghc.ccc_ctl);
+        println!("{}: {:x}", "ccc_ports", it.ghc.ccc_ports);
+        println!("{}: {:x}", "em_loc", it.ghc.em_loc);
+        println!("{}: {:x}", "em_ctl", it.ghc.em_ctl);
+        println!("{}: {:x}", "cap2", it.ghc.cap2);
+        println!("{}: {:x}", "bohc", it.ghc.bohc);
+    }
+}
+
+impl Drop for AhciDevice
+{
+    fn drop(&mut self)
+    {
+        let vmem = self.abar_vaddr;
+        let size = self.abar_actual_size;
+        if vmem != 0
+        {
+            self.abar_vaddr = 0;
+            self.abar_actual_size = 0;
+
+            let size_aligned = (size + 0x0f_ffusize) & !0x0f_ffusize;
+            let count = size_aligned >> 12;
+            unmap::<BasePageSize>(vmem, count);
+            virtualmem::deallocate(vmem, size_aligned);
+        }
     }
 }
 
@@ -46,72 +187,9 @@ pub fn is_ahci_device<T>(device: &T) -> bool
     && device.get_programming_interface() == 0x01
 }
 
-pub fn init_device(device: &PciGeneric)
-{
-    debug_assert!(
-        device.get_class() == 0x01
-        && device.get_subclass() == 0x06
-        && device.get_programming_interface() == 0x01);
-
-    /*let addr = device.get_bar_5();
-    let size = device.get_bar_5_size();
-    println!("{:?} {}", addr, size);*/
-
-    let mut cmd = device.get_command();
-    println!("Original: {}", cmd);
-    println!("Status: {}", device.get_status());
-    cmd.set_interrupt_disable(true);
-    cmd.set_memory_space(true);
-    cmd.set_bus_master(true);
-    println!("Edit: {}", cmd);
-    device.set_command(cmd);
-    let cmd = device.get_command();
-    println!("Device: {}", cmd);
-    println!("Status: {}", device.get_status());
-
-    let addr = device.get_bar_5();
-    let size_raw = device.get_bar_5_size();
-    let size = {
-        (size_raw + 0x0f_ff) & !0x0f_ffu32 // 0x10_00 = 4096 = "Basic Page Size"
-    };
-    debug_assert_eq!(addr, device.get_bar_5());
-
-    let addr = MemSpaceBarValue::try_from(addr);
-    println!("{:?} {:x} ({:x})", addr, size, size_raw);
-    let addr = addr.unwrap();
-
-    let vmem = crate::arch::mm::virtualmem::allocate(size as usize);
-    crate::arch::mm::paging::map::<crate::arch::mm::paging::BasePageSize>(
-        vmem,
-        addr.address() as usize,
-        1,
-        crate::arch::mm::paging::PageTableEntryFlags::CACHE_DISABLE);
-    println!("{:x}", vmem);
-
-    // This code fails on my laptop
-    // Looks like it does not need to be page aligned, the size that is
-    // My laptop returns a size of 0x800 (2048) which is less then 0x1000 (4096)
-
-    let vmem_ptr = vmem as *const HbaMem;
-    let it = unsafe { vmem_ptr.read_volatile() };
-    println!("{}: {:b}", "capability", it.capability);
-    println!("{}: {:x}", "global_host_control", it.global_host_control);
-    println!("{}: {:x}", "interrupt_status", it.interrupt_status);
-    println!("{}: {:x}", "port_implemented", it.port_implemented);
-    println!("{}: {:x}", "version", it.version);
-    println!("{}: {:x}", "ccc_ctl", it.ccc_ctl);
-    println!("{}: {:x}", "ccc_pts", it.ccc_pts);
-    println!("{}: {:x}", "em_loc", it.em_loc);
-    println!("{}: {:x}", "em_ctl", it.em_ctl);
-    println!("{}: {:x}", "cap2", it.cap2);
-    println!("{}: {:x}", "bohc", it.bohc);
-
-    crate::arch::mm::paging::unmap::<crate::arch::mm::paging::BasePageSize>(vmem, 1);
-    crate::arch::mm::virtualmem::deallocate(vmem, size as usize);
-}
-
 // Maybe a struct, as an undefined value would be undefined behaviour with this code and with a struct could be correctly rejected as "unknown"?
 // Frame Information Structure
+// TODO: Redo with official specs
 #[repr(u8)]
 pub enum FisType
 {
@@ -125,26 +203,106 @@ pub enum FisType
     DevBits = 0xa1
 }
 
+// HBA Mem Registers (all hex in bytes)
+// 00..=2b Generic Host Control
+// 2C..=FF Actually or effectivelly reserved (like vendor specific registers)
+
+// TODO: Rename to some form of "Generic Host Control"
+// AHCI Spec 3.1
 #[repr(C)]
-pub struct HbaMem
+pub struct GenericHostControl
 {
-    capability: u32,
-    global_host_control: u32,
-    interrupt_status: u32,
-    port_implemented: u32,
-    version: u32,
+    /// host CAPabilities
+    cap: u32,
+    /// Global Host Control
+    ghc: u32,
+    /// Interrupt Status
+    is: u32,
+    /// Ports Implemented
+    /// 
+    /// Bitmask: 0x04 says, the 3rd Port (Port 2) is the only available port
+    /// 
+    /// 0x05 says, the first and thrid Port (Port 0 & 2) are the only available ports
+    pi: u32,
+    /// VerSion
+    vs: u32,
+    /// Command Completion Coalescing ConTroL
     ccc_ctl: u32,
-    ccc_pts: u32,
+    /// Command Completion Coalescing PORTS
+    ccc_ports: u32,
+    /// Enclosure Management LOCation
     em_loc: u32,
+    /// Enclosure Management ConTroL
     em_ctl: u32,
+    /// host CAPabilities extended
     cap2: u32,
-    bohc: u32,
-    _reserved: [u8; 0x74],
-    vendor_specific: [u8; 0x60],
-    // Following up to 32 ports
+    /// Bios/Os Handoff Control & status
+    bohc: u32
 }
 
+// Alignment is 4
+// this fits into the 0x80 spacing between ports
+// first port (0) starts at 0x100 (relative to the beginning of the HBA Memory Registers)
+// second port (1) starts at 0x180
+// the last potential port (31) starts at 0x1080
+// if port 30 and therefor port 31 are present, as they start at 0x1000, more than one page will be required for mapping
+// AHCI Spec 3.3
 #[repr(C)]
-pub struct HbaPort
+pub struct PortRegister
 {
+    /// Lower 32-bit Command List Base address
+    clb: u32,
+    /// Higher 32-bit Command List Base address
+    clbu: u32,
+    /// lower 32-bit Fis Base address
+    fb: u32,
+    /// higher 32-bit Fis Base address
+    fbu: u32,
+    /// Interrupts Status
+    is: u32,
+    /// Interrupt Enable, not Internet Explorer
+    ie: u32,
+    /// Command and Status
+    cmd: u32,
+    /// reserved, like always, should be 0
+    _reserved: u32,
+    /// Task File Data
+    tfd: u32,
+    /// Signature
+    sig: u32,
+    /// Serial ata STatuS
+    ssts: u32,
+    /// Serial ata ConTroL
+    sctl: u32,
+    /// Serial ata ERRor
+    serr: u32
+}
+
+// because I had no luck with #[repr(C, align(0x80))]
+pub struct AlignedPortRegisters
+{
+    pub value: PortRegister,
+    _padding: [u8; 0x4c]
+}
+
+// According to VSCode, this struct has the intended layout (TODO: check this comment for typo)
+// TODO: Makes this struct sense?
+/// The thing, the ABAR (BAR\[5\]) points to
+#[repr(C)]
+pub struct HbaMemory
+{
+    /// Generic Host Control
+    pub ghc: GenericHostControl,
+    /// Reserved 0x2C..=0x5F
+    /// 
+    /// Reserved for NVMHCI 0x60..=0x9F
+    /// 
+    /// Vendor Specific 0xA0..=0xFF
+    /// 
+    /// These ranges are relative to the start of the HbaMemory struct, in this field, 0x2C should be at offset 0
+    reserved: [u8; 0xd4],
+    /// At least <TODO> ports must be present, at most 32 ports can be present.
+    /// 
+    /// Ports in the docs (and in this field) are numerated from 0 to 31
+    pub ports: [AlignedPortRegisters]
 }
