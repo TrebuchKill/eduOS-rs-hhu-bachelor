@@ -149,7 +149,7 @@ impl AhciDevice
         /*let ptr = self.abar_vaddr;
         let it = unsafe { ptr.read_volatile() };*/
         println!("{}: {}", "cap", it.ghc.cap);
-        println!("{}: {:x}", "ghc", it.ghc.ghc);
+        println!("{}: {}", "ghc", it.ghc.ghc);
         println!("{}: {:x}", "is", it.ghc.is);
         println!("{}: {:032b}", "pi", it.ghc.pi);
         println!("{}: {:x}", "vs", it.ghc.vs);
@@ -157,7 +157,7 @@ impl AhciDevice
         println!("{}: {:x}", "ccc_ports", it.ghc.ccc_ports);
         println!("{}: {:x}", "em_loc", it.ghc.em_loc);
         println!("{}: {:x}", "em_ctl", it.ghc.em_ctl);
-        println!("{}: {:x}", "cap2", it.ghc.cap2);
+        println!("{}: {}", "cap2", it.ghc.cap2);
         println!("{}: {:x}", "bohc", it.ghc.bohc);
     }
 }

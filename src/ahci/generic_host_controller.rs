@@ -6,6 +6,12 @@ pub use interfacespeed::*;
 mod capabilities;
 pub use capabilities::*;
 
+mod global_hba_control;
+pub use global_hba_control::*;
+
+mod ex_capabilities;
+pub use ex_capabilities::*;
+
 // AHCI Spec 3.1
 #[repr(C)]
 pub struct GenericHostControl
@@ -13,7 +19,7 @@ pub struct GenericHostControl
     /// host CAPabilities
     pub cap: Capabilities,
     /// Global Host Control
-    pub ghc: u32,
+    pub ghc: GlobalHbaControl,
     /// Interrupt Status
     pub is: u32,
     /// Ports Implemented
@@ -33,7 +39,9 @@ pub struct GenericHostControl
     /// Enclosure Management ConTroL
     pub em_ctl: u32,
     /// host CAPabilities extended
-    pub cap2: u32,
+    pub cap2: CapabilitiesExtended,
     /// Bios/Os Handoff Control & status
+    /// 
+    /// INVALID/IGNORED if CAP2.BOH is false/0
     pub bohc: u32
 }

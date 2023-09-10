@@ -8,6 +8,11 @@ use super::InterfaceSpeed;
 pub struct Capabilities(u32);
 impl Capabilities
 {
+    pub fn from_raw(value: u32) -> Self
+    {
+        Self(value)
+    }
+
     pub fn get_raw(self) -> u32
     {
         self.0
