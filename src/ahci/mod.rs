@@ -1,5 +1,8 @@
 // NEW
 
+mod generic_host_controller;
+use generic_host_controller::*;
+
 use crate::{
     pci::{
         devices::{
@@ -145,7 +148,7 @@ impl AhciDevice
         let it = self.get_hba_mem().unwrap();
         /*let ptr = self.abar_vaddr;
         let it = unsafe { ptr.read_volatile() };*/
-        println!("{}: {:b}", "cap", it.ghc.cap);
+        println!("{}: {}", "cap", it.ghc.cap);
         println!("{}: {:x}", "ghc", it.ghc.ghc);
         println!("{}: {:x}", "is", it.ghc.is);
         println!("{}: {:032b}", "pi", it.ghc.pi);
@@ -206,39 +209,6 @@ pub enum FisType
 // HBA Mem Registers (all hex in bytes)
 // 00..=2b Generic Host Control
 // 2C..=FF Actually or effectivelly reserved (like vendor specific registers)
-
-// TODO: Rename to some form of "Generic Host Control"
-// AHCI Spec 3.1
-#[repr(C)]
-pub struct GenericHostControl
-{
-    /// host CAPabilities
-    cap: u32,
-    /// Global Host Control
-    ghc: u32,
-    /// Interrupt Status
-    is: u32,
-    /// Ports Implemented
-    /// 
-    /// Bitmask: 0x04 says, the 3rd Port (Port 2) is the only available port
-    /// 
-    /// 0x05 says, the first and thrid Port (Port 0 & 2) are the only available ports
-    pi: u32,
-    /// VerSion
-    vs: u32,
-    /// Command Completion Coalescing ConTroL
-    ccc_ctl: u32,
-    /// Command Completion Coalescing PORTS
-    ccc_ports: u32,
-    /// Enclosure Management LOCation
-    em_loc: u32,
-    /// Enclosure Management ConTroL
-    em_ctl: u32,
-    /// host CAPabilities extended
-    cap2: u32,
-    /// Bios/Os Handoff Control & status
-    bohc: u32
-}
 
 // Alignment is 4
 // this fits into the 0x80 spacing between ports
