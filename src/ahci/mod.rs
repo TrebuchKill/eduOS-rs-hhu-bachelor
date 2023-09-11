@@ -260,7 +260,7 @@ impl AhciDevice
         println!("{}: {:x}", "em_loc", it.ghc.em_loc);
         println!("{}: {:x}", "em_ctl", it.ghc.em_ctl);
         println!("{}: {}", "cap2", it.ghc.cap2);
-        println!("{}: {:x}", "bohc", it.ghc.bohc);
+        println!("{}: {}", "bohc", it.ghc.bohc);
     }
 }
 

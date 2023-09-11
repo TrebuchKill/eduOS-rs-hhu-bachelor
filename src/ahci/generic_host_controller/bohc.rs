@@ -160,22 +160,27 @@ impl Display for BiosOsHandoffControl
         let mut any = false;
         if self.get_bb()
         {
+            any = true;
             write!(f, "{}, ", if f.alternate() { "BIOS Busy" } else { "bb" })?;
         }
         if self.get_ooc()
         {
+            any = true;
             write!(f, "{}, ", if f.alternate() { "OS Ownership Change" } else { "ooc" })?;
         }
         if self.get_sooe()
         {
+            any = true;
             write!(f, "{}, ", if f.alternate() { "SMI on OS Ownership Change Enable" } else { "sooe" })?;
         }
         if self.get_oos()
         {
+            any = true;
             write!(f, "{}, ", if f.alternate() { "OS Owned Semaphore" } else { "oos" })?;
         }
         if self.get_bos()
         {
+            any = true;
             write!(f, "{}, ", if f.alternate() { "BIOS Owned Semaphore" } else { "bos" })?;
         }
         if !any
