@@ -77,6 +77,89 @@ impl AhciDevice
         }
     }
 
+    fn load_address(&mut self)
+    {
+        let addr = MemSpaceBarValue::try_from(self.device.get_bar_5()).unwrap();
+        let size = self.device.get_bar_5_size();
+        
+        // Like the macro in src/macros.rs
+        let size_page_aligned = (size + 0x0f_ff) & !0x0f_ffu32;
+
+        #[cfg(debug_assertions)]
+        println!("({:08x}, {:08x}, {:08x})", addr.address(), size, size_page_aligned);
+
+        debug_assert_eq!(Ok(addr), self.device.get_bar_5().try_into());
+
+        let vmem = virtualmem::allocate(size_page_aligned as usize);
+        map::<BasePageSize>(
+            vmem,
+            addr.address() as usize,
+            (size_page_aligned >> 12) as usize, // division by 0x10_00 is the same as right shift by 12, when the lowest 12 bits are 0, which they are, thanks to the alignment
+            PageTableEntryFlags::CACHE_DISABLE | PageTableEntryFlags::WRITABLE
+        );
+        self.abar_vaddr = vmem;
+        self.abar_actual_size = size as usize;
+        debug_assert_eq!(
+            crate::arch::x86_64::mm::paging::get_page_table_entry::<BasePageSize>(vmem).map(|it| it.address()),
+            Some(addr.address() as usize)
+        );
+    }
+
+    fn bios_os_handof(&self)
+    {
+        let mem = self.get_hba_mem().expect("Failed to load address");
+        if mem.ghc.cap2.get_boh()
+        {
+            todo!("Bios Os Handoff not implemented yet")
+        }
+    }
+
+    // 10.4.3
+    /// HBA Resets
+    /// - GHC.AE
+    /// - GHC.IE
+    /// - IS Register
+    /// - all port register fields except fields intiallized by hardware (HwInit) and PxFB/PxFBU/PxCLB/PxCLBU and 
+    fn reset(&mut self)
+    {
+        let vaddr = self.abar_vaddr;
+        let size = self.abar_actual_size;
+        let mem = self.get_hba_mem_mut().expect("Failed to load address");
+        println!("Resetting HBA...");
+        println!(
+            "{:#016x}\n{:#016x}\n{:#016x}",
+            vaddr,
+            size,
+            mem as *mut _ as *const () as usize);
+        mem.ghc.ghc.set_hr();
+        print!("Waiting...");
+        loop 
+        {
+            print!(".");
+            // After a second consider HBA in locked/hung state
+            if !mem.ghc.ghc.get_hr()
+            {
+                println!("!\nReset successful!");
+                break;
+            }
+        }
+    }
+
+    fn enable_ahci_mode_and_interrupts(&mut self)
+    {
+        let mem = self.get_hba_mem_mut().expect("Failed to load address");
+        
+        // Enable ahci mode only if legacy mode is supported
+        // Otherwise it should be already on and writing is undefined
+        if !mem.ghc.ghc.get_ae() && !mem.ghc.cap.get_sam()
+        {
+            unsafe { mem.ghc.ghc.set_ae(true) }
+        }
+
+        // Enable interrupts
+        mem.ghc.ghc.set_ie(true);
+    }
+
     fn init(&mut self)
     {
         // Enable Inte
@@ -86,7 +169,14 @@ impl AhciDevice
         cmd.set_bus_master(true);
         self.device.set_command(cmd);
 
-        let addr = MemSpaceBarValue::try_from(self.device.get_bar_5()).unwrap();
+        self.load_address();
+        self.bios_os_handof();
+        self.reset();
+
+        println!("TODO: Setup interrupts");
+        self.enable_ahci_mode_and_interrupts();
+
+        /*let addr = MemSpaceBarValue::try_from(self.device.get_bar_5()).unwrap();
         let size = self.device.get_bar_5_size();
         // Like the macro in src/macros.rs
         let size_page_aligned = (size + 0x0f_ff) & !0x0f_ffu32;
@@ -103,7 +193,7 @@ impl AhciDevice
             PageTableEntryFlags::CACHE_DISABLE
         );
         self.abar_vaddr = vmem;
-        self.abar_actual_size = size as usize;
+        self.abar_actual_size = size as usize;*/
     }
 
     fn calc_ports_slice_size(&self) -> usize
