@@ -105,12 +105,24 @@ impl AhciDevice
         );
     }
 
-    fn bios_os_handof(&self)
+    // 10.6.3
+    fn bios_os_handoff(&mut self)
     {
-        let mem = self.get_hba_mem().expect("Failed to load address");
+        let mem = self.get_hba_mem_mut().expect("Failed to load address");
         if mem.ghc.cap2.get_boh()
         {
-            todo!("Bios Os Handoff not implemented yet")
+            print!("BIOS OS Handoff");
+            mem.ghc.bohc.set_oos(true);
+            loop
+            {
+                print!(".");
+                if !mem.ghc.bohc.get_bos()
+                {
+                    println!("!\nWait successful.");
+                    break;
+                }
+            }
+            todo!("Wait 25ms and check BOHC.BB"); // If set, wait at least 2 seconds for the bios tasks to complete
         }
     }
 
@@ -170,7 +182,7 @@ impl AhciDevice
         self.device.set_command(cmd);
 
         self.load_address();
-        self.bios_os_handof();
+        self.bios_os_handoff();
         self.reset();
 
         println!("TODO: Setup interrupts");

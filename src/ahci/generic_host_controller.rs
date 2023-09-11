@@ -12,6 +12,9 @@ pub use global_hba_control::*;
 mod ex_capabilities;
 pub use ex_capabilities::*;
 
+mod bohc;
+pub use bohc::*;
+
 // AHCI Spec 3.1
 #[repr(C)]
 pub struct GenericHostControl
@@ -43,5 +46,5 @@ pub struct GenericHostControl
     /// Bios/Os Handoff Control & status
     /// 
     /// INVALID/IGNORED if CAP2.BOH is false/0
-    pub bohc: u32
+    pub bohc: BiosOsHandoffControl
 }
