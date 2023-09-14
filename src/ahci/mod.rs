@@ -3,6 +3,9 @@
 mod generic_host_controller;
 use generic_host_controller::*;
 
+mod ports;
+use ports::*;
+
 use crate::{
     pci::{
         devices::{
@@ -30,6 +33,34 @@ use core::convert::{
     TryFrom,
     TryInto
 };
+
+// Why don't I just use the paste crate?
+// Do I want this macro really badley? Do I want to comprimise on the comment?
+/*#[macro_export]
+macro_rules! define_rwc
+{
+    ($getter:ident $setter:ident $pos:literal $($comment:literal)?) => {
+
+        /// $comment
+        pub fn $getter(self) -> bool
+        {
+            self.0 & (1u32 << $pos) != 0
+        }
+
+        /// $comment
+        pub fn $setter(&mut self)
+        {
+            self.0 = 1u32 << $pos;
+        }
+    };
+    ($($getter:ident $setter:ident $pos:literal $($comment:literal)?),+) => {
+
+        $($crate::ahci::define_rwc!($getter $setter $pos $($comment)?);)+
+    }
+}*/
+
+// https://stackoverflow.com/a/31749071
+// pub use define_rwc;
 
 pub struct AhciDevice
 {
@@ -172,6 +203,16 @@ impl AhciDevice
         mem.ghc.ghc.set_ie(true);
     }
 
+    fn panic_on_yet_to_support(&self)
+    {
+        let mem = self.get_hba_mem().expect("Failed to load address");
+        if mem.ghc.cap.get_sss()
+        {
+            todo!("Staggered Spin-up");
+        }
+        // TODO: PxCMD.CPD on any port
+    }
+
     fn init(&mut self)
     {
         // Enable Inte
@@ -184,6 +225,7 @@ impl AhciDevice
         self.load_address();
         self.bios_os_handoff();
         self.reset();
+        self.panic_on_yet_to_support();
 
         println!("TODO: Setup interrupts");
         self.enable_ahci_mode_and_interrupts();
@@ -261,6 +303,23 @@ impl AhciDevice
         println!("{}: {:x}", "em_ctl", it.ghc.em_ctl);
         println!("{}: {}", "cap2", it.ghc.cap2);
         println!("{}: {}", "bohc", it.ghc.bohc);
+        for port in &it.ports
+        {
+            println!("{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+                "clb", port.value.clb,
+                "clbu", port.value.clbu,
+                "fb", port.value.fb,
+                "fbu", port.value.fbu,
+                "is", port.value.is,
+                "ie", port.value.ie,
+                "cmd", port.value.cmd,
+                "tfd", port.value.tfd,
+                "sig", port.value.sig,
+                "ssts", port.value.ssts,
+                "sctl", port.value.sctl,
+                "serr", port.value.serr
+            );
+        }
     }
 }
 
@@ -312,50 +371,7 @@ pub enum FisType
 // 00..=2b Generic Host Control
 // 2C..=FF Actually or effectivelly reserved (like vendor specific registers)
 
-// Alignment is 4
-// this fits into the 0x80 spacing between ports
-// first port (0) starts at 0x100 (relative to the beginning of the HBA Memory Registers)
-// second port (1) starts at 0x180
-// the last potential port (31) starts at 0x1080
-// if port 30 and therefor port 31 are present, as they start at 0x1000, more than one page will be required for mapping
-// AHCI Spec 3.3
-#[repr(C)]
-pub struct PortRegister
-{
-    /// Lower 32-bit Command List Base address
-    clb: u32,
-    /// Higher 32-bit Command List Base address
-    clbu: u32,
-    /// lower 32-bit Fis Base address
-    fb: u32,
-    /// higher 32-bit Fis Base address
-    fbu: u32,
-    /// Interrupts Status
-    is: u32,
-    /// Interrupt Enable, not Internet Explorer
-    ie: u32,
-    /// Command and Status
-    cmd: u32,
-    /// reserved, like always, should be 0
-    _reserved: u32,
-    /// Task File Data
-    tfd: u32,
-    /// Signature
-    sig: u32,
-    /// Serial ata STatuS
-    ssts: u32,
-    /// Serial ata ConTroL
-    sctl: u32,
-    /// Serial ata ERRor
-    serr: u32
-}
 
-// because I had no luck with #[repr(C, align(0x80))]
-pub struct AlignedPortRegisters
-{
-    pub value: PortRegister,
-    _padding: [u8; 0x4c]
-}
 
 // According to VSCode, this struct has the intended layout (TODO: check this comment for typo)
 // TODO: Makes this struct sense?
