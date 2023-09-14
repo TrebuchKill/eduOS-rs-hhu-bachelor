@@ -1,4 +1,4 @@
 target
 *.o
 .vscode/
-/drive0.qcow
+/*.qcow
