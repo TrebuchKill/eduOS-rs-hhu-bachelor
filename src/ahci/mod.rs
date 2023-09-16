@@ -1,5 +1,7 @@
 // NEW
 
+mod macros;
+
 mod generic_host_controller;
 use generic_host_controller::*;
 
