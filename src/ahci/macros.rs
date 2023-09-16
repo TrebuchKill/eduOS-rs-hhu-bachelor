@@ -1,3 +1,26 @@
+/*macro_rules! define_getter
+{
+    ($bit:literal $name_short:ident $name_long:literal) => {
+        paste::paste!(
+            #[doc = $name_long]
+            pub fn [<get_ $name_short>](self) -> bool
+            {
+                self.0 & (1u32 << $bit) != 0
+            }
+        );
+    };
+    ($bit:literal $name_short:ident $name_long:literal $comment:literal) => {
+
+        paste::paste!(
+            #[doc = concat!($name_long, "\n\n", $comment)]
+            pub fn [<get_ $name_short>](self) -> bool
+            {
+                self.0 & (1u32 << $bit) != 0
+            }
+        );
+    };
+}*/
+
 // 1.5
 // TODO: Multi Bit Values
 #[macro_export]
@@ -24,7 +47,7 @@ macro_rules! define_register
         }
     };
     // Read Only
-    (ro $name_short:ident $name_long:literal $bit:literal $(, $($rest:tt)+)?) => {
+    (ro $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
         paste::paste!(
             #[doc = $name_long]
             pub fn [<get_ $name_short>](self) -> bool
@@ -36,7 +59,7 @@ macro_rules! define_register
         $($crate::ahci::macros::define_register!($($rest)+);)?
     };
     // Read Write
-    (rw $name_short:ident $name_long:literal $bit:literal $(, $($rest:tt)+)?) => {
+    (rw $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
         paste::paste!(
             #[doc = $name_long]
             pub fn [<get_ $name_short>](self) -> bool
@@ -64,7 +87,7 @@ macro_rules! define_register
         $($crate::ahci::macros::define_register!($($rest)+);)?
     };
     // Write 1 to clear
-    (rwc $name_short:ident $name_long:literal $bit:literal $(, $($rest:tt)+)?) => {
+    (rwc $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
         paste::paste!(
             #[doc = $name_long]
             pub fn [<get_ $name_short>](self) -> bool
@@ -84,7 +107,7 @@ macro_rules! define_register
         $($crate::ahci::macros::define_register!($($rest)+);)?
     };
     // Write 1 to set
-    (rw1 $name_short:ident $name_long:literal $bit:literal $(, $($rest:tt)+)?) => {
+    (rw1 $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
         paste::paste!(
             #[doc = $name_long]
             pub fn [<get_ $name_short>](self) -> bool
@@ -97,9 +120,8 @@ macro_rules! define_register
             #[doc = $name_long]
             pub fn [<set_ $name_short>](&mut self)
             {
-                // This todo is supposed to give a dead code warning, making me or anyone else validate this assumption!
-                todo!("Is this in a register, where only RO, RW1 and RWC are present?");
-                self.0 = 1u32 << $bit;
+                // This is in a register, where RW are present
+                self.0 |= 1u32 << $bit;
             }
         );
 

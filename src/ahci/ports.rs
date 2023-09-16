@@ -6,6 +6,9 @@ use interrupt_status::*;
 mod interrupt_enable;
 use interrupt_enable::*;
 
+mod command;
+use command::*;
+
 // Alignment is 4
 // this fits into the 0x80 spacing between ports
 // first port (0) starts at 0x100 (relative to the beginning of the HBA Memory Registers)
@@ -35,7 +38,7 @@ pub struct PortRegister
     /// Interrupt Enable, not Internet Explorer
     pub ie: InterruptEnable,
     /// Command and Status
-    pub cmd: u32,
+    pub cmd: Command,
     /// reserved, like always, should be 0
     _reserved: u32,
     /// Task File Data
