@@ -43,7 +43,7 @@ macro_rules! define_register
                 self.0
             }
 
-            $($crate::ahci::macros::define_register!($($rest)+);)?
+            $($crate::drivers::ahci::macros::define_register!($($rest)+);)?
         }
     };
     // Read Only
@@ -56,7 +56,7 @@ macro_rules! define_register
             }
         );
 
-        $($crate::ahci::macros::define_register!($($rest)+);)?
+        $($crate::drivers::ahci::macros::define_register!($($rest)+);)?
     };
     // Read Write
     (rw $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
@@ -84,7 +84,7 @@ macro_rules! define_register
             }
         );
 
-        $($crate::ahci::macros::define_register!($($rest)+);)?
+        $($crate::drivers::ahci::macros::define_register!($($rest)+);)?
     };
     // Write 1 to clear
     (rwc $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
@@ -104,7 +104,7 @@ macro_rules! define_register
             }
         );
 
-        $($crate::ahci::macros::define_register!($($rest)+);)?
+        $($crate::drivers::ahci::macros::define_register!($($rest)+);)?
     };
     // Write 1 to set
     (rw1 $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
@@ -125,7 +125,7 @@ macro_rules! define_register
             }
         );
 
-        $($crate::ahci::macros::define_register!($($rest)+);)?
+        $($crate::drivers::ahci::macros::define_register!($($rest)+);)?
     };
 }
 

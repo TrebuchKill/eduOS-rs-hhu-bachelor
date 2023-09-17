@@ -9,14 +9,15 @@ mod ports;
 use ports::*;
 
 use crate::{
-    pci::{
+    drivers::pci::{
         devices::{
-            Device as PciDevice,
+            // Device as PciDevice,
             CommonHeader,
-            Generic as PciGeneric
+            Generic as PciGeneric,
+            AnyDevice as AnyPciDevice
         },
         MemSpaceBarValue,
-        BarValue
+        // BarValue
     },
     arch::{
         mm::{
@@ -28,7 +29,7 @@ use crate::{
             virtualmem
         },
         BasePageSize
-    }
+    }, synch::spinlock::Spinlock
 };
 
 use core::convert::{
@@ -100,12 +101,11 @@ impl AhciDevice
     // ‘1’ and then setting GHC.HR to ‘1’ if desired.
     // Page 104, Chap 10.1.2
 
-    pub fn try_new(device: crate::pci::devices::AnyDevice) -> Option<Self>
+    pub fn try_new(device: AnyPciDevice) -> Option<Self>
     {
-        use crate::pci::devices::AnyDevice;
         match device
         {
-            AnyDevice::Generic(dev) => Self::new(dev),
+            AnyPciDevice::Generic(dev) => Self::new(dev),
             _ => None
         }
     }
@@ -395,4 +395,42 @@ pub struct HbaMemory
     /// 
     /// Ports in the docs (and in this field) are numerated from 0 to 31
     pub ports: [AlignedPortRegisters]
+}
+
+static DEVICES: Spinlock<alloc::vec::Vec<AhciDevice>> = Spinlock::new(alloc::vec::Vec::new());
+
+pub fn init()
+{
+    let mut devices = DEVICES.lock();
+    if !devices.is_empty()
+    {
+        panic!("AHCI already initialized");
+    }
+    super::pci::on_each_generic_device_mut(|dev| {
+
+        if let Some(dev) = AhciDevice::new(dev)
+        {
+            devices.push(dev);
+        }
+    })
+}
+
+pub fn on_each_device<F>(fun: F)
+    where F: Fn(&AhciDevice) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        fun(dev);
+    }
+}
+
+pub fn on_each_device_mut<F>(mut fun: F)
+    where F: FnMut(&AhciDevice) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        fun(dev);
+    }
 }

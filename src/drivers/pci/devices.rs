@@ -121,6 +121,7 @@ impl<T: Device> CommonHeader for T
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnyDevice
 {
     Generic(Generic),

@@ -30,6 +30,7 @@ macro_rules! define_bar_accessors {
     };
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Generic
 {
     pub(super) bus: u8,

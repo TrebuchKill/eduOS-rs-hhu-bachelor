@@ -4,7 +4,7 @@
 
 // https://wiki.osdev.org/Pci
 
-use crate::synch::spinlock::{SpinlockIrqSave, SpinlockIrqSaveGuard};
+use crate::synch::spinlock::{SpinlockIrqSave, SpinlockIrqSaveGuard, Spinlock};
 
 const CONFIG_ADDRESS: u16 = 0x0c_f8;
 const CONFIG_DATA:    u16 = 0x0c_fc;
@@ -222,4 +222,114 @@ impl Iterator for PciScanner
 pub fn scan_bus() -> alloc::vec::Vec<devices::AnyDevice>
 {
     PciScanner::new().collect()
+}
+
+static DEVICES: Spinlock<alloc::vec::Vec<devices::AnyDevice>> = Spinlock::new(alloc::vec::Vec::new());
+
+pub fn init()
+{
+    let mut it = DEVICES.lock();
+    it.clear();
+    it.extend(PciScanner::new());
+
+    #[cfg(debug_assertions)]
+    println!("Found {} PCI Devices", it.len());
+}
+
+pub fn on_each_device<F>(fun: F)
+    where F: Fn(devices::AnyDevice) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        fun(*dev);
+    }
+}
+
+pub fn on_each_generic_device<F>(fun: F)
+    where F: Fn(devices::Generic) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        if let devices::AnyDevice::Generic(it) = dev
+        {
+            fun(*it);
+        }
+    }
+}
+
+pub fn on_each_card_bridge_device<F>(fun: F)
+    where F: Fn(devices::CardBridge) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        if let devices::AnyDevice::CardBridge(it) = dev
+        {
+            fun(*it);
+        }
+    }
+}
+
+pub fn on_each_pci_bridge_device<F>(fun: F)
+    where F: Fn(devices::PciBridge) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        if let devices::AnyDevice::PciBridge(it) = dev
+        {
+            fun(*it);
+        }
+    }
+}
+
+pub fn on_each_device_mut<F>(mut fun: F)
+    where F: FnMut(devices::AnyDevice) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        fun(*dev);
+    }
+}
+
+pub fn on_each_generic_device_mut<F>(mut fun: F)
+    where F: FnMut(devices::Generic) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        if let devices::AnyDevice::Generic(it) = dev
+        {
+            fun(*it);
+        }
+    }
+}
+
+pub fn on_each_card_bridge_device_mut<F>(mut fun: F)
+    where F: FnMut(devices::CardBridge) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        if let devices::AnyDevice::CardBridge(it) = dev
+        {
+            fun(*it);
+        }
+    }
+}
+
+pub fn on_each_pci_bridge_device_mut<F>(mut fun: F)
+    where F: FnMut(devices::PciBridge) -> ()
+{
+    let devs = DEVICES.lock();
+    for dev in &*devs
+    {
+        if let devices::AnyDevice::PciBridge(it) = dev
+        {
+            fun(*it);
+        }
+    }
 }

@@ -2,6 +2,7 @@
 
 use super::Device;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PciBridge
 {
     pub(super) bus: u8,

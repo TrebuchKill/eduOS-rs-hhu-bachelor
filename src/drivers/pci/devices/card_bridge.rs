@@ -1,6 +1,7 @@
 // NEW
 use super::Device;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CardBridge
 {
     pub(super) bus: u8,

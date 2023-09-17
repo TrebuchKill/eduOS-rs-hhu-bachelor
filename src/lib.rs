@@ -45,8 +45,7 @@ pub mod scheduler;
 pub mod synch;
 pub mod syscall;
 
-pub mod ahci;
-pub mod pci;
+pub mod drivers;
 
 // Using the Simple Chunk Allocator for heap managment of the kernel
 // see
@@ -70,7 +69,23 @@ pub fn test()
 {
 	use alloc::vec::Vec;
 
-	let devices = pci::scan_bus();
+	let mut pci_count = 0;
+	let mut generic_count = 0;
+	let mut card_count = 0;
+	let mut bridge_count = 0;
+	let mut ahci_count = 0;
+
+	drivers::pci::on_each_device_mut(|_| pci_count += 1);
+	drivers::pci::on_each_generic_device_mut(|_| generic_count += 1);
+	drivers::pci::on_each_pci_bridge_device_mut(|_| bridge_count += 1);
+	drivers::pci::on_each_card_bridge_device_mut(|_| card_count += 1);
+
+	drivers::ahci::on_each_device_mut(|_| ahci_count += 1);
+	drivers::ahci::on_each_device(|it| it.debug_print());
+
+	println!("({}, {}, {}, {}, {})", pci_count, generic_count, card_count, bridge_count, ahci_count);
+
+	/*let devices = pci::scan_bus();
 	println!("Found {} PCI Device(s)", devices.len());
 	let ahci_devices = devices.into_iter()
 		// .filter(|it| ahci::is_ahci_device(it))
@@ -80,7 +95,7 @@ pub fn test()
 	for dev in &ahci_devices
 	{
 		dev.debug_print();
-	}
+	}*/
 }
 
 /// This function is called on panic.

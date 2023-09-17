@@ -1,4 +1,4 @@
-use crate::ahci::macros::define_register;
+use crate::drivers::ahci::macros::define_register;
 
 use core::fmt::{
     Result,

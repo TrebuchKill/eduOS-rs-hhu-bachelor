@@ -18,6 +18,7 @@ use eduos_rs::mm;
 use eduos_rs::scheduler;
 use eduos_rs::scheduler::task::{ LOW_PRIORITY, NORMAL_PRIORITY };
 use eduos_rs::{LogLevel, LOGGER};
+use eduos_rs::drivers;
 
 extern "C" fn create_user_foo() {
 	let path = String::from("/bin/demo");
@@ -45,6 +46,7 @@ pub extern "C" fn main() -> ! {
 	mm::init();
 	scheduler::init();
 	fs::init();
+	drivers::init();
 
 	println!("Hello from eduOS-rs!");
 
