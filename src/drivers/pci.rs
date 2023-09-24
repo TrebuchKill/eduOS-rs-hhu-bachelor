@@ -31,6 +31,8 @@ fn get_address(bus: u8, device: u8, func: u8, offset: u8) -> u32
 
 static PCI_LOCK: SpinlockIrqSave<()> = SpinlockIrqSave::new(());
 
+// this function should probably be unsafe
+/// Offset needs to be 4 byte aligned (the 2 lowest value bits set to 0)
 fn read<'a>(guard: SpinlockIrqSaveGuard<'a, ()>, bus: u8, device: u8, func: u8, offset: u8)
     -> (SpinlockIrqSaveGuard<'a, ()>, u32)
 {
@@ -46,6 +48,8 @@ fn read<'a>(guard: SpinlockIrqSaveGuard<'a, ()>, bus: u8, device: u8, func: u8, 
     }
 }
 
+// this function should probably be unsafe
+/// Offset needs to be 4 byte aligned (the 2 lowest value bits set to 0)
 fn write<'a>(guard: SpinlockIrqSaveGuard<'a, ()>, bus: u8, device: u8, func: u8, offset: u8, value: u32)
     -> SpinlockIrqSaveGuard<'a, ()>
 {

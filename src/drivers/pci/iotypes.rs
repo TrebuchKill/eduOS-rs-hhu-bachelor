@@ -30,11 +30,17 @@ impl DataType for u8
 
     fn write(self, bus: u8, device: u8, func: u8, offset: u8)
     {
-        let _ = bus;
-        let _ = device;
-        let _ = func;
-        let _ = offset;
-        todo!();
+        let lock = PCI_LOCK.lock();
+        let (lock, value) = read(lock, bus, device, func, offset & 0xfc);
+        let new_value = match offset & 0x3
+        {
+            0 => (value & 0xff_ff_ff_00) | (self as u32),
+            1 => (value & 0xff_ff_00_ff) | ((self as u32) << 8),
+            2 => (value & 0xff_00_ff_ff) | ((self as u32) << 16),
+            3 => (value & 0x00_ff_ff_ff) | ((self as u32) << 24),
+            _ => unreachable!()
+        };
+        let _ = write(lock, bus, device, func, offset & 0xfc, new_value);
     }
 }
 

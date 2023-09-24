@@ -48,6 +48,21 @@ impl Generic
         get_bar_4 get_bar_4_size 0x20,
         get_bar_5 get_bar_5_size 0x24
     );
+
+    pub fn get_interrupt_line(&self) -> u8
+    {
+        u8::read(self.bus, self.device, self.function, 0x3c)
+    }
+
+    pub fn set_interrupt_line(&self, value: u8)
+    {
+        value.write(self.bus, self.device, self.function, 0x3c)
+    }
+
+    pub fn get_interrupt_pin(&self) -> u8
+    {
+        u8::read(self.bus, self.device, self.function, 0x3d)
+    }
 }
 
 impl Device for Generic
