@@ -15,8 +15,8 @@ impl DataType for u8
 {
     fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
     {
-        // let read = u32::read(bus, device, func, offset);
-        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
+        // let read = u32::read(bus, device, func, offset); // this old way cut off the invalid 2 lowest bits. the new way (line below) does NOT cut it off... I'm surprised it did not explode in my face
+        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset & 0xfc);
 
         match offset & 0x03
         {
@@ -49,7 +49,7 @@ impl DataType for u16
     fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
     {
         //let read = u32::read(bus, device, func, offset);
-        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
+        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset & 0xfc);
 
         match offset & 0x03
         {
@@ -85,7 +85,7 @@ impl DataType for u32
 {
     fn read(bus: u8, device: u8, func: u8, offset: u8) -> Self
     {
-        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset);
+        let (_, read) = read(PCI_LOCK.lock(), bus, device, func, offset & 0xfc);
         read
     }
 

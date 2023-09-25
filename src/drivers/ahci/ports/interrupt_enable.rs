@@ -9,25 +9,27 @@ use core::fmt::{
     UpperHex
 };
 
+use crate::drivers::Register;
+
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InterruptEnable(u32);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterruptEnable(Register<u32>);
 impl InterruptEnable
 {
     pub fn from_raw(value: u32) -> Self
     {
-        Self(value)
+        Self(Register::new(value))
     }
 
     pub fn get_raw(self) -> u32
     {
-        self.0
+        self.0.get()
     }
 
     /// Cold Port Detect Status
-    pub fn get_cpds(self) -> bool
+    pub fn get_cpds(&self) -> bool
     {
-        self.0 & (1u32 << 31) != 0
+        self.0.get() & (1u32 << 31) != 0
     }
 
     /// Cold Port Detect Status
@@ -47,9 +49,9 @@ impl InterruptEnable
     }
 
     /// Task File Error Status
-    pub fn get_tfes(self) -> bool
+    pub fn get_tfes(&self) -> bool
     {
-        self.0 & (1u32 << 30) != 0
+        self.0.get() & (1u32 << 30) != 0
     }
 
     /// Task File Error Status
@@ -67,9 +69,9 @@ impl InterruptEnable
     }
 
     /// Host Bus Fatal Error Status
-    pub fn get_hbfs(self) -> bool
+    pub fn get_hbfs(&self) -> bool
     {
-        self.0 & (1u32 << 29) != 0
+        self.0.get() & (1u32 << 29) != 0
     }
 
     /// Host Bus Fatal Error Status
@@ -87,9 +89,9 @@ impl InterruptEnable
     }
 
     /// Host Bus Data Error Status
-    pub fn get_hbds(self) -> bool
+    pub fn get_hbds(&self) -> bool
     {
-        self.0 & (1u32 << 28) != 0
+        self.0.get() & (1u32 << 28) != 0
     }
 
     /// Host Bus Data Error Status
@@ -107,9 +109,9 @@ impl InterruptEnable
     }
 
     /// Interface Fatal Error Status
-    pub fn get_ifs(self) -> bool
+    pub fn get_ifs(&self) -> bool
     {
-        self.0 & (1u32 << 27) != 0
+        self.0.get() & (1u32 << 27) != 0
     }
 
     /// Interface Fatal Error Status
@@ -127,9 +129,9 @@ impl InterruptEnable
     }
 
     /// Interface Non-fatal Error Status
-    pub fn get_infs(self) -> bool
+    pub fn get_infs(&self) -> bool
     {
-        self.0 & (1u32 << 26) != 0
+        self.0.get() & (1u32 << 26) != 0
     }
 
     /// Interface Non-fatal Error Status
@@ -147,9 +149,9 @@ impl InterruptEnable
     }
 
     /// Overflow Status
-    pub fn get_ofs(self) -> bool
+    pub fn get_ofs(&self) -> bool
     {
-        self.0 & (1u32 << 24) != 0
+        self.0.get() & (1u32 << 24) != 0
     }
 
     /// Overflow Status
@@ -167,9 +169,9 @@ impl InterruptEnable
     }
 
     /// Incorrect Port Multiplier Status
-    pub fn get_ipms(self) -> bool
+    pub fn get_ipms(&self) -> bool
     {
-        self.0 & (1u32 << 23) != 0
+        self.0.get() & (1u32 << 23) != 0
     }
 
     /// Incorrect Port Multiplier Status
@@ -187,9 +189,9 @@ impl InterruptEnable
     }
 
     /// PhyRdy Change Status (RO)
-    pub fn get_prcs(self) -> bool
+    pub fn get_prcs(&self) -> bool
     {
-        self.0 & (1u32 << 22) != 0
+        self.0.get() & (1u32 << 22) != 0
     }
 
     /// PhyRdy Change Interrupt Enable
@@ -207,9 +209,9 @@ impl InterruptEnable
     }
 
     /// Device Mechanical Presence Status
-    pub fn get_dmps(self) -> bool
+    pub fn get_dmps(&self) -> bool
     {
-        self.0 & (1u32 << 7) != 0
+        self.0.get() & (1u32 << 7) != 0
     }
 
     /// Device Mechanical Presence Status
@@ -229,9 +231,9 @@ impl InterruptEnable
     }
 
     /// Port Change Interrupt Enable
-    pub fn get_pce(self) -> bool
+    pub fn get_pce(&self) -> bool
     {
-        self.0 & (1u32 << 6) != 0
+        self.0.get() & (1u32 << 6) != 0
     }
 
     /// Port Change Interrupt Enable
@@ -249,9 +251,9 @@ impl InterruptEnable
     }
 
     /// Descriptor Processed
-    pub fn get_dps(self) -> bool
+    pub fn get_dps(&self) -> bool
     {
-        self.0 & (1u32 << 5) != 0
+        self.0.get() & (1u32 << 5) != 0
     }
 
     /// Descriptor Processed
@@ -269,9 +271,9 @@ impl InterruptEnable
     }
 
     /// Unknown FIS Interrupt Enable
-    pub fn get_ufe(self) -> bool
+    pub fn get_ufe(&self) -> bool
     {
-        self.0 & (1u32 << 4) != 0
+        self.0.get() & (1u32 << 4) != 0
     }
 
     pub fn set_ufe(&mut self, value: bool)
@@ -288,9 +290,9 @@ impl InterruptEnable
     }
 
     /// Set Device Bits Interrupt
-    pub fn get_sdbs(self) -> bool
+    pub fn get_sdbs(&self) -> bool
     {
-        self.0 & (1u32 << 3) != 0
+        self.0.get() & (1u32 << 3) != 0
     }
 
     /// Set Device Bits Interrupt
@@ -308,9 +310,9 @@ impl InterruptEnable
     }
 
     /// DMA Setup FIS Interrupt
-    pub fn get_dss(self) -> bool
+    pub fn get_dss(&self) -> bool
     {
-        self.0 & (1u32 << 2) != 0
+        self.0.get() & (1u32 << 2) != 0
     }
 
     /// DMA Setup FIS Interrupt
@@ -328,9 +330,9 @@ impl InterruptEnable
     }
 
     /// PIO Setup FIS Interrupt
-    pub fn get_pss(self) -> bool
+    pub fn get_pss(&self) -> bool
     {
-        self.0 & (1u32 << 1) != 0
+        self.0.get() & (1u32 << 1) != 0
     }
 
     /// PIO Setup FIS Interrupt
@@ -348,9 +350,9 @@ impl InterruptEnable
     }
 
     /// Device to Host Register FIS Interrupt
-    pub fn get_dhrs(self) -> bool
+    pub fn get_dhrs(&self) -> bool
     {
-        self.0 & 1u32 != 0
+        self.0.get() & 1u32 != 0
     }
 
     /// Device to Host Register FIS Interrupt
@@ -366,7 +368,6 @@ impl InterruptEnable
             self.0 &= !MASK;
         }
     }
-
 }
 
 impl Display for InterruptEnable

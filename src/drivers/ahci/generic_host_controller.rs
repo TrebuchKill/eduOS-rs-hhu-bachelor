@@ -15,7 +15,10 @@ pub use ex_capabilities::*;
 mod bohc;
 pub use bohc::*;
 
+use crate::drivers::util::Register;
+
 // AHCI Spec 3.1
+// Size 44 (0x2C), Align 4
 #[repr(C)]
 pub struct GenericHostControl
 {
@@ -24,23 +27,23 @@ pub struct GenericHostControl
     /// Global Host Control
     pub ghc: GlobalHbaControl,
     /// Interrupt Status
-    pub is: u32,
+    pub is: Register<u32>,
     /// Ports Implemented
     /// 
     /// Bitmask: 0x04 says, the 3rd Port (Port 2) is the only available port
     /// 
     /// 0x05 says, the first and thrid Port (Port 0 & 2) are the only available ports
-    pub pi: u32,
+    pub pi: Register<u32>,
     /// VerSion
-    pub vs: u32,
+    pub vs: Register<u32>,
     /// Command Completion Coalescing ConTroL
-    pub ccc_ctl: u32,
+    pub ccc_ctl: Register<u32>,
     /// Command Completion Coalescing PORTS
-    pub ccc_ports: u32,
+    pub ccc_ports: Register<u32>,
     /// Enclosure Management LOCation
-    pub em_loc: u32,
+    pub em_loc: Register<u32>,
     /// Enclosure Management ConTroL
-    pub em_ctl: u32,
+    pub em_ctl: Register<u32>,
     /// host CAPabilities extended
     pub cap2: CapabilitiesExtended,
     /// Bios/Os Handoff Control & status

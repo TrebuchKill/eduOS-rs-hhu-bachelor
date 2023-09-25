@@ -2,74 +2,75 @@
 
 use core::convert::TryInto;
 use super::InterfaceSpeed;
+use crate::drivers::util::Register;
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Capabilities(u32);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Capabilities(Register<u32>);
 impl Capabilities
 {
     pub fn from_raw(value: u32) -> Self
     {
-        Self(value)
+        Self(Register::new(value))
     }
 
-    pub fn get_raw(self) -> u32
+    pub fn get_raw(&self) -> u32
     {
-        self.0
+        self.0.get()
     }
 
     /// Supports 64-bit Addressing
-    pub fn get_s64a(self) -> bool
+    pub fn get_s64a(&self) -> bool
     {
-        self.0 & (1u32 << 31) != 0
+        self.0.get() & (1u32 << 31) != 0
     }
 
     /// Supports Native Command Queuing
-    pub fn get_sncq(self) -> bool
+    pub fn get_sncq(&self) -> bool
     {
-        self.0 & (1u32 << 30) != 0
+        self.0.get() & (1u32 << 30) != 0
     }
 
     /// Supports SNotification Register
-    pub fn get_ssntf(self) -> bool
+    pub fn get_ssntf(&self) -> bool
     {
-        self.0 & (1u32 << 29) != 0
+        self.0.get() & (1u32 << 29) != 0
     }
 
     /// Supports Mechanical Presence Switch
-    pub fn get_smps(self) -> bool
+    pub fn get_smps(&self) -> bool
     {
-        self.0 & (1u32 << 28) != 0
+        self.0.get() & (1u32 << 28) != 0
     }
 
     /// Supports Staggered Spin-up
-    pub fn get_sss(self) -> bool
+    pub fn get_sss(&self) -> bool
     {
-        self.0 & (1u32 << 27) != 0
+        self.0.get() & (1u32 << 27) != 0
     }
 
     /// Supports Aggressive Link Power Management
-    pub fn get_salp(self) -> bool
+    pub fn get_salp(&self) -> bool
     {
-        self.0 & (1u32 << 26) != 0
+        self.0.get() & (1u32 << 26) != 0
     }
 
     /// Supports Activity LED
-    pub fn get_sal(self) -> bool
+    pub fn get_sal(&self) -> bool
     {
-        self.0 & (1u32 << 25) != 0
+        self.0.get() & (1u32 << 25) != 0
     }
 
     /// Supports Command List Override
-    pub fn get_sclo(self) -> bool
+    pub fn get_sclo(&self) -> bool
     {
-        self.0 & (1u32 << 24) != 0
+        self.0.get() & (1u32 << 24) != 0
     }
 
     /// Interface Speed Support
-    pub fn get_iss(self) -> InterfaceSpeed
+    pub fn get_iss(&self) -> InterfaceSpeed
     {
-        let result = (self.0 & 0x00_f0_00_00) >> 20;
+        let result = (self.0.get() & 0x00_f0_00_00) >> 20;
         if cfg!(debug_assertions)
         {
             InterfaceSpeed(result.try_into().expect("Expected the result to only be the lowest 4 bits, which should fit no problem into 8 bits"))
@@ -83,47 +84,47 @@ impl Capabilities
     // 19: Reserved
 
     /// Supports AHCI mode only
-    pub fn get_sam(self) -> bool
+    pub fn get_sam(&self) -> bool
     {
-        self.0 & (1u32 << 18) != 0
+        self.0.get() & (1u32 << 18) != 0
     }
 
     /// Supports Port Multiplier
-    pub fn get_spm(self) -> bool
+    pub fn get_spm(&self) -> bool
     {
-        self.0 & (1u32 << 17) != 0
+        self.0.get() & (1u32 << 17) != 0
     }
 
     /// FIS-based Switching Supported
-    pub fn get_fbss(self) -> bool
+    pub fn get_fbss(&self) -> bool
     {
-        self.0 & (1u32 << 16) != 0
+        self.0.get() & (1u32 << 16) != 0
     }
 
     /// PIO Multiple DRQ Block
-    pub fn get_pmd(self) -> bool
+    pub fn get_pmd(&self) -> bool
     {
-        self.0 & (1u32 << 15) != 0
+        self.0.get() & (1u32 << 15) != 0
     }
 
     /// Slumber State Capable
-    pub fn get_ssc(self) -> bool
+    pub fn get_ssc(&self) -> bool
     {
-        self.0 & (1u32 << 14) != 0
+        self.0.get() & (1u32 << 14) != 0
     }
 
     /// Partial State Capable
-    pub fn get_psc(self) -> bool
+    pub fn get_psc(&self) -> bool
     {
-        self.0 & (1u32 << 13) != 0
+        self.0.get() & (1u32 << 13) != 0
     }
 
     /// Number of Command Slots per Port, as provided by the hardware
     /// 
     /// Note: returned value 0 means 1, returned value 1 means 2, ..., returned value 31 means 32
-    pub fn get_ncs(self) -> u8
+    pub fn get_ncs(&self) -> u8
     {
-        let result = (self.0 & 0x00_00_1f_00) >> 8;
+        let result = (self.0.get() & 0x00_00_1f_00) >> 8;
         if cfg!(debug_assertions)
         {
             result.try_into().expect("Expected the result to only be the lowest 5 bits, which should fit no problem into 8 bits")
@@ -135,27 +136,27 @@ impl Capabilities
     }
 
     /// Number of Command Slots per Port, adjusted so 1 means 1, 32 means 32.
-    pub fn get_ncs_adjusted(self) -> u8
+    pub fn get_ncs_adjusted(&self) -> u8
     {
         self.get_ncs() + 1
     }
 
     /// Command Completion Coalescing Supported
-    pub fn get_cccs(self) -> bool
+    pub fn get_cccs(&self) -> bool
     {
-        self.0 & (1u32 << 7) != 0
+        self.0.get() & (1u32 << 7) != 0
     }
 
     /// Enclosure Management Supported
-    pub fn get_ems(self) -> bool
+    pub fn get_ems(&self) -> bool
     {
-        self.0 & (1u32 << 6) != 0
+        self.0.get() & (1u32 << 6) != 0
     }
 
     /// Supports External SATA
-    pub fn get_sxs(self) -> bool
+    pub fn get_sxs(&self) -> bool
     {
-        self.0 & (1u32 << 5) != 0
+        self.0.get() & (1u32 << 5) != 0
     }
 
     /// Number of Ports, as provided by the hardware.
@@ -163,13 +164,13 @@ impl Capabilities
     /// Actual Port Number may differ, this is only a theoretical supported number by the hba
     /// 
     /// Note: the value 0 means 1 port, the value 31 means 32 ports
-    pub fn get_np(self) -> u8
+    pub fn get_np(&self) -> u8
     {
-        (self.0 & 0x00_00_00_1f) as u8
+        (self.0.get() & 0x00_00_00_1f) as u8
     }
 
     /// Number of Ports, adjusted so 1 means 1, 32 means 32.
-    pub fn get_np_adjusted(self) -> u8
+    pub fn get_np_adjusted(&self) -> u8
     {
         self.get_np() + 1
     }

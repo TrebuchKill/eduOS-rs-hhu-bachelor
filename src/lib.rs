@@ -81,16 +81,16 @@ pub fn test()
 	drivers::pci::on_each_pci_bridge_device_mut(|_| bridge_count += 1);
 	drivers::pci::on_each_card_bridge_device_mut(|_| card_count += 1);
 
-	drivers::pci::on_each_generic_device(|it|
+	/*drivers::pci::on_each_generic_device(|it|
 	{
 		if drivers::ahci::is_ahci_device(&it)
 		{
 			println!("Pin:  {}\nLine: {}", it.get_interrupt_pin(), it.get_interrupt_line());
 		}
-	});
+	});*/
 
 	drivers::ahci::on_each_device_mut(|_| ahci_count += 1);
-	// drivers::ahci::on_each_device(|it| it.debug_print());
+	drivers::ahci::on_each_device(|it| it.debug_print());
 
 	println!("({}, {}, {}, {}, {})", pci_count, generic_count, card_count, bridge_count, ahci_count);
 

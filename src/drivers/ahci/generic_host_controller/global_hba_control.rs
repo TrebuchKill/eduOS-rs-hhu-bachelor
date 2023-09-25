@@ -1,18 +1,20 @@
 // NEW
 
+use crate::drivers::util::Register;
+
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GlobalHbaControl(u32);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlobalHbaControl(Register<u32>);
 impl GlobalHbaControl
 {
     pub fn from_raw(value: u32) -> Self
     {
-        Self(value)
+        Self(Register::new(value))
     }
 
-    pub fn get_raw(self) -> u32
+    pub fn get_raw(&self) -> u32
     {
-        self.0
+        self.0.get()
     }
 
     /// AHCI Enable
@@ -20,9 +22,9 @@ impl GlobalHbaControl
     /// If CAP.SAM is set to 1, this field is read only and be always 1
     /// 
     /// If CAP.SAM is set to 0, this field is read write and be reset to 0
-    pub fn get_ae(self) -> bool
+    pub fn get_ae(&self) -> bool
     {
-        self.0 & (1u32 << 31) != 0
+        self.0.get() & (1u32 << 31) != 0
     }
 
     /// AHCI Enable
@@ -54,24 +56,24 @@ impl GlobalHbaControl
         const SET_MASK: u32 = 1u32 << 31;
         if value
         {
-            self.0 = self.0 | SET_MASK;
+            self.0 |= SET_MASK;
         }
         else
         {
-            self.0 = self.0 & !SET_MASK;
+            self.0 &= !SET_MASK;
         }
     }
 
     /// MSI Revert to Single Message
-    pub fn get_mrsm(self) -> bool
+    pub fn get_mrsm(&self) -> bool
     {
-        self.0 & (1u32 << 2) != 0
+        self.0.get() & (1u32 << 2) != 0
     }
 
     /// Interrupt Enable
-    pub fn get_ie(self) -> bool
+    pub fn get_ie(&self) -> bool
     {
-        self.0 & (1u32 << 1) != 0
+        self.0.get() & (1u32 << 1) != 0
     }
 
     /// Interrupt Enable
@@ -96,9 +98,9 @@ impl GlobalHbaControl
     }
 
     /// HBA Reset
-    pub fn get_hr(self) -> bool
+    pub fn get_hr(&self) -> bool
     {
-        self.0 & 1u32 != 0
+        self.0.get() & 1u32 != 0
     }
 
     /// HBA Reset

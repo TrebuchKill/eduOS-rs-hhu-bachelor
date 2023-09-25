@@ -103,9 +103,9 @@ define_register!(
 impl Command
 {
     /// Interface Communication Control
-    pub fn get_icc(self) -> IccState
+    pub fn get_icc(&self) -> IccState
     {
-        IccState::from_raw(((self.0 & 0xf0_00_00_00u32) >> 28) as u8)
+        IccState::from_raw(((self.0.get() & 0xf0_00_00_00u32) >> 28) as u8)
             .expect("Illegal value for PxCMD.ICC")
         /*match (self.0 & 0xf0_00_00_00u32) >> 28
         {
@@ -122,13 +122,13 @@ impl Command
     /// Interface Communication Control
     pub fn set_icc(&mut self, value: IccState)
     {
-        self.0 = (self.0 & 0x0f_ff_ff_ffu32) | ((value.0 as u32) << 28);
+        self.0.set((self.0.get() & 0x0f_ff_ff_ffu32) | ((value.0 as u32) << 28));
     }
 
     /// Current Command Slot
-    pub fn get_ccs(self) -> u8
+    pub fn get_ccs(&self) -> u8
     {
-        ((self.0 & 0x00_00_1f_00) >> 8) as u8
+        ((self.0.get() & 0x00_00_1f_00) >> 8) as u8
     }
 }
 

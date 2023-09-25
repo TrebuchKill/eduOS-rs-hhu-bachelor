@@ -9,44 +9,46 @@ use core::fmt::{
     Result
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CapabilitiesExtended(u32);
+use crate::drivers::util::Register;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapabilitiesExtended(Register<u32>);
 impl CapabilitiesExtended
 {
     /// DevSleep Entrance from Slumber Only
-    pub fn get_deso(self) -> bool
+    pub fn get_deso(&self) -> bool
     {
-        self.0 & (1u32 << 5) != 0
+        self.0.get() & (1u32 << 5) != 0
     }
 
     /// Supports Aggressive Device Sleep Management
-    pub fn get_sadm(self) -> bool
+    pub fn get_sadm(&self) -> bool
     {
-        self.0 & (1u32 << 4) != 0
+        self.0.get() & (1u32 << 4) != 0
     }
 
     /// Supports Device Sleep
-    pub fn get_sds(self) -> bool
+    pub fn get_sds(&self) -> bool
     {
-        self.0 & (1u32 << 3) != 0
+        self.0.get() & (1u32 << 3) != 0
     }
 
     /// Automatic Partial to Slumber Transitions
-    pub fn get_apst(self) -> bool
+    pub fn get_apst(&self) -> bool
     {
-        self.0 & (1u32 << 2) != 0
+        self.0.get() & (1u32 << 2) != 0
     }
 
     /// NVMHCI Present
-    pub fn get_nvmp(self) -> bool
+    pub fn get_nvmp(&self) -> bool
     {
-        self.0 & (1u32 << 1) != 0
+        self.0.get() & (1u32 << 1) != 0
     }
 
     /// BIOS/OS Handoff
-    pub fn get_boh(self) -> bool
+    pub fn get_boh(&self) -> bool
     {
-        self.0 & 1u32 != 0
+        self.0.get() & 1u32 != 0
     }
 }
 

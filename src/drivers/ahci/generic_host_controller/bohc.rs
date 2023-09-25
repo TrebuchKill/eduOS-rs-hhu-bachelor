@@ -8,26 +8,27 @@ use core::fmt::{
     Formatter,
     Result
 };
+use crate::drivers::util::Register;
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BiosOsHandoffControl(u32);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BiosOsHandoffControl(Register<u32>);
 impl BiosOsHandoffControl
 {
     pub fn from_raw(value: u32) -> Self
     {
-        Self(value)
+        Self(Register::new(value))
     }
 
-    pub fn get_raw(self) -> u32
+    pub fn get_raw(&self) -> u32
     {
-        self.0
+        self.0.get()
     }
 
     /// BIOS Busy
-    pub fn get_bb(self) -> bool
+    pub fn get_bb(&self) -> bool
     {
-        self.0 & (1u32 << 4) != 0
+        self.0.get() & (1u32 << 4) != 0
     }
 
     /// BIOS Busy
@@ -52,12 +53,12 @@ impl BiosOsHandoffControl
     }
 
     /// OS Ownership Change
-    pub fn get_ooc(self) -> bool
+    pub fn get_ooc(&self) -> bool
     {
-        self.0 & (1u32 << 3) != 0
+        self.0.get() & (1u32 << 3) != 0
     }
 
-    /*
+    /* Comment Out Reason: While it is RW, the doc gives the impression, this is only to be set by the firmware/bios
     /// OS Ownership Change
     pub fn set_ooc(&mut self)
     {
@@ -72,9 +73,9 @@ impl BiosOsHandoffControl
     }*/
 
     /// SMI on OS Ownership Change Enable
-    pub fn get_sooe(self) -> bool
+    pub fn get_sooe(&self) -> bool
     {
-        self.0 & (1u32 << 2) != 0
+        self.0.get() & (1u32 << 2) != 0
     }
 
     /// SMI on OS Ownership Change Enable
@@ -99,9 +100,9 @@ impl BiosOsHandoffControl
     }
 
     /// OS Owned Semaphore
-    pub fn get_oos(self) -> bool
+    pub fn get_oos(&self) -> bool
     {
-        self.0 & (1u32 << 1) != 0
+        self.0.get() & (1u32 << 1) != 0
     }
 
     /// OS Owned Semaphore
@@ -126,9 +127,9 @@ impl BiosOsHandoffControl
     }
 
     /// BIOS Owned Semaphore
-    pub fn get_bos(self) -> bool
+    pub fn get_bos(&self) -> bool
     {
-        self.0 & 1u32 != 0
+        self.0.get() & 1u32 != 0
     }
 
     /// BIOS Owned Semaphore

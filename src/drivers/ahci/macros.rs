@@ -29,18 +29,18 @@ macro_rules! define_register
     (struct $name:ident $(; $($rest:tt)+)?) => {
         
         #[repr(transparent)]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub struct $name(u32);
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct $name($crate::drivers::Register<u32>);
         impl $name
         {
             pub fn from_raw(value: u32) -> Self
             {
-                Self(value)
+                Self($crate::drivers::Register::new(value))
             }
 
-            pub fn as_raw(self) -> u32
+            pub fn as_raw(&self) -> u32
             {
-                self.0
+                self.0.get()
             }
 
             $($crate::drivers::ahci::macros::define_register!($($rest)+);)?
@@ -50,9 +50,9 @@ macro_rules! define_register
     (ro $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
         paste::paste!(
             #[doc = $name_long]
-            pub fn [<get_ $name_short>](self) -> bool
+            pub fn [<get_ $name_short>](&self) -> bool
             {
-                self.0 & (1u32 << $bit) != 0
+                self.0.get() & (1u32 << $bit) != 0
             }
         );
 
@@ -62,9 +62,9 @@ macro_rules! define_register
     (rw $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
         paste::paste!(
             #[doc = $name_long]
-            pub fn [<get_ $name_short>](self) -> bool
+            pub fn [<get_ $name_short>](&self) -> bool
             {
-                self.0 & (1u32 << $bit) != 0
+                self.0.get() & (1u32 << $bit) != 0
             }
         );
 
@@ -90,9 +90,9 @@ macro_rules! define_register
     (rwc $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
         paste::paste!(
             #[doc = $name_long]
-            pub fn [<get_ $name_short>](self) -> bool
+            pub fn [<get_ $name_short>](&self) -> bool
             {
-                self.0 & (1u32 << $bit) != 0
+                self.0.get() & (1u32 << $bit) != 0
             }
         );
 
@@ -100,7 +100,7 @@ macro_rules! define_register
             #[doc = $name_long]
             pub fn [<clear_ $name_short>](&mut self)
             {
-                self.0 = 1u32 << $bit;
+                self.0.set(1u32 << $bit);
             }
         );
 
@@ -110,9 +110,9 @@ macro_rules! define_register
     (rw1 $bit:literal $name_short:ident $name_long:literal $(, $($rest:tt)+)?) => {
         paste::paste!(
             #[doc = $name_long]
-            pub fn [<get_ $name_short>](self) -> bool
+            pub fn [<get_ $name_short>](&self) -> bool
             {
-                self.0 & (1u32 << $bit) != 0
+                self.0.get() & (1u32 << $bit) != 0
             }
         );
 
