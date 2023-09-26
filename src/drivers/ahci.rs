@@ -8,6 +8,8 @@ use generic_host_controller::*;
 mod ports;
 use ports::*;
 
+mod fis;
+
 use crate::{
     drivers::pci::{
         devices::{

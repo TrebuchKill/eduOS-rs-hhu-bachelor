@@ -13,7 +13,7 @@ pub struct Register<T>(T);
 // Should the getter and setter be unsafe? I mean, they both need to be aligned, and considering how this struct will be used, generally speaking it may not be guranteed.
 impl<T> Register<T>
 {
-    pub fn new(value: T) -> Self
+    pub const fn new(value: T) -> Self
     {
         Self(value)
     }

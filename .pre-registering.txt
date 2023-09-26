@@ -1,0 +1,16 @@
+# while not a security issue, DO NOT PUSH
+# meant to ensure pre-apply-register and post-apply-register return the same values
+# discard afterwards
+
+cap: sam, sncq, s64a, #CommandSlots: 32, #Ports: 6, Speed: Gen 1 (1.5 Gbps)
+ghc: ae, ie, 
+is: 0
+pi: 00000000000000000000000000111111
+vs: 10000
+ccc_ctl: 0
+ccc_ports: 0
+em_loc: 0
+em_ctl: 0
+cap2: None
+bohc: None
+(7, 7, 0, 0, 1)
