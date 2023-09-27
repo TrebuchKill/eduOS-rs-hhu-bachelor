@@ -15,6 +15,12 @@ pub use ex_capabilities::*;
 mod bohc;
 pub use bohc::*;
 
+mod interrupt_status;
+pub use interrupt_status::*;
+
+mod ports_implemented;
+pub use ports_implemented::*;
+
 use crate::drivers::util::Register;
 
 // AHCI Spec 3.1
@@ -27,13 +33,13 @@ pub struct GenericHostControl
     /// Global Host Control
     pub ghc: GlobalHbaControl,
     /// Interrupt Status
-    pub is: Register<u32>,
+    pub is: InterruptStatus,
     /// Ports Implemented
     /// 
     /// Bitmask: 0x04 says, the 3rd Port (Port 2) is the only available port
     /// 
     /// 0x05 says, the first and thrid Port (Port 0 & 2) are the only available ports
-    pub pi: Register<u32>,
+    pub pi: PortsImplemented,
     /// VerSion
     pub vs: Register<u32>,
     /// Command Completion Coalescing ConTroL

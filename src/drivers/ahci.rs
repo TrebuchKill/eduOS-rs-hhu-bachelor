@@ -217,6 +217,21 @@ impl AhciDevice
         // TODO: PxCMD.CPD on any port
     }
 
+    fn init_ports(&mut self)
+    {
+        let mem = self.get_hba_mem_mut().expect("Failed to load address");
+        let number_of_command_slots = mem.ghc.cap.get_ncs_adjusted();
+        let number_of_ports = mem.ghc.cap.get_np_adjusted();
+        println!("NCS: {}, NP: {}", number_of_command_slots, number_of_ports);
+        for i in 0u8..32u8
+        {
+            if mem.ghc.pi.get(i)
+            {
+                println!("Port {:2} implemented", i);
+            }
+        }
+    }
+
     fn init(&mut self)
     {
         // Enable Inte
@@ -233,6 +248,7 @@ impl AhciDevice
 
         println!("TODO: Setup interrupts");
         self.enable_ahci_mode_and_interrupts();
+        self.init_ports();
 
         /*let addr = MemSpaceBarValue::try_from(self.device.get_bar_5()).unwrap();
         let size = self.device.get_bar_5_size();
@@ -307,22 +323,27 @@ impl AhciDevice
         println!("{}: {:x}", "em_ctl", it.ghc.em_ctl);
         println!("{}: {}", "cap2", it.ghc.cap2);
         println!("{}: {}", "bohc", it.ghc.bohc);
-        for port in &it.ports
+        for i in 0..32
         {
-            println!("{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
-                "clb", port.value.clb,
-                "clbu", port.value.clbu,
-                "fb", port.value.fb,
-                "fbu", port.value.fbu,
-                "is", port.value.is,
-                "ie", port.value.ie,
-                "cmd", port.value.cmd,
-                "tfd", port.value.tfd,
-                "sig", port.value.sig,
-                "ssts", port.value.ssts,
-                "sctl", port.value.sctl,
-                "serr", port.value.serr
-            );
+            if it.ghc.pi.get(i)
+            {
+                let port = &it.ports[i as usize];
+                println!("Port {:2}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+                    i,
+                    "clb", port.value.clb,
+                    "clbu", port.value.clbu,
+                    "fb", port.value.fb,
+                    "fbu", port.value.fbu,
+                    "is", port.value.is,
+                    "ie", port.value.ie,
+                    "cmd", port.value.cmd,
+                    "tfd", port.value.tfd,
+                    "sig", port.value.sig,
+                    "ssts", port.value.ssts,
+                    "sctl", port.value.sctl,
+                    "serr", port.value.serr
+                );
+            }
         }
     }
 }
