@@ -1,3 +1,5 @@
+// EDITED to hopefully fix https://github.com/RWTH-OS/eduOS-rs/issues/35
+
 // Copyright (c) 2017 Colin Finck, RWTH Aachen University
 //
 // Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
@@ -171,6 +173,12 @@ impl PageTableEntry {
 		flags_to_set.insert(PageTableEntryFlags::PRESENT);
 		flags_to_set.insert(PageTableEntryFlags::ACCESSED);
 		self.physical_address_and_flags = physical_address | flags_to_set.bits();
+	}
+
+	/// Clears the address and flags to 0. Used for unmapping. Based on set.
+	fn clear(&mut self)
+	{
+		self.physical_address_and_flags = 0usize;
 	}
 }
 
@@ -390,6 +398,8 @@ trait PageTableMethods {
 		physical_address: usize,
 		flags: PageTableEntryFlags,
 	) -> bool;
+	fn unmap_page_in_this_table<S: PageSize>(&mut self, page: Page<S>) -> bool;
+	fn unmap_page<S: PageSize>(&mut self, page: Page<S>) -> bool;
 	fn drop_user_space(&mut self);
 }
 
@@ -414,6 +424,23 @@ impl<L: PageTableLevel> PageTableMethods for PageTable<L> {
 		);
 
 		if flush {
+			page.flush_from_tlb();
+		}
+
+		flush
+	}
+
+	/// Unmaps a single page in this table. Based on map_page_in_this_table.
+	fn unmap_page_in_this_table<S: PageSize>(&mut self, page: Page<S>) -> bool
+	{
+		assert!(L::LEVEL == S::MAP_LEVEL);
+		let index = page.table_index::<L>();
+		let flush = self.entries[index].is_present();
+
+		self.entries[index].clear();
+
+		if flush
+		{
 			page.flush_from_tlb();
 		}
 
@@ -460,6 +487,12 @@ impl<L: PageTableLevel> PageTableMethods for PageTable<L> {
 		flags: PageTableEntryFlags,
 	) -> bool {
 		self.map_page_in_this_table::<S>(page, physical_address, flags)
+	}
+
+	/// Unmaps a single page. Based on map_age.
+	default fn unmap_page<S: PageSize>(&mut self, page: Page<S>) -> bool
+	{
+		self.unmap_page_in_this_table::<S>(page)
 	}
 }
 
@@ -556,6 +589,32 @@ where
 			self.map_page_in_this_table::<S>(page, physical_address, flags)
 		}
 	}
+
+	/// Unmaps a single page. Based on map_page
+	fn unmap_page<S: PageSize>(&mut self, page: Page<S>) -> bool
+	{
+		assert!(L::LEVEL > S::MAP_LEVEL);
+		if L::LEVEL > S::MAP_LEVEL
+		{
+			let index = page.table_index::<L>();
+			if !self.entries[index].is_present()
+			{
+				// When the entry is not present, we have nothing to unmap.
+				// But trying to unmap something that wasn't mapped may be evidence for a bug.
+				debug!("Trying to unmap an non-mapped Page.");
+				false
+			}
+			else
+			{
+				let subtable = self.subtable(page);
+				subtable.unmap_page(page)
+			}
+		}
+		else
+		{
+			self.unmap_page_in_this_table(page)
+		}
+	}
 }
 
 impl<L: PageTableLevelWithSubtables> PageTable<L>
@@ -594,6 +653,15 @@ where
 		for page in range {
 			self.map_page(page, current_physical_address, flags);
 			current_physical_address += S::SIZE;
+		}
+	}
+
+	/// Unmaps a continous range of pages. Based on map_pages.
+	fn unmap_pages<S: PageSize>(&mut self, range: PageIter<S>)
+	{
+		for page in range
+		{
+			self.unmap_page(page);
 		}
 	}
 
@@ -708,6 +776,7 @@ pub fn virtual_to_physical(virtual_address: usize) -> usize {
 	get_physical_address::<BasePageSize>(virtual_address)
 }
 
+// Modified to call the new unmap_pages
 pub fn unmap<S: PageSize>(virtual_address: usize, count: usize) {
 	debug!(
 		"Unmapping virtual address {:#X} ({} pages)",
@@ -716,7 +785,7 @@ pub fn unmap<S: PageSize>(virtual_address: usize, count: usize) {
 
 	let range = get_page_range::<S>(virtual_address, count);
 	let root_pagetable = unsafe { &mut *PML4_ADDRESS };
-	root_pagetable.map_pages(range, 0, PageTableEntryFlags::BLANK);
+	root_pagetable.unmap_pages(range);
 }
 
 pub fn map<S: PageSize>(
