@@ -337,7 +337,19 @@ extern "x86-interrupt" fn timer_handler(stack_frame: ExceptionStackFrame) {
 	);
 
 	send_eoi_to_master();
-	schedule();
+	let old = super::pit::inc_ticks();
+	if old % 10 == 0
+	{
+		serial_print!("!"); // 10027 µs = 10.027 ms
+		schedule();
+	}
+}
+
+extern "x86-interrupt" fn ahci_handler(stack_frame: ExceptionStackFrame)
+{
+	send_eoi_to_slave();
+	send_eoi_to_master();
+	println!("Got interrupt from AHCI device (I hope)");
 }
 
 /// An interrupt gate descriptor.
@@ -646,6 +658,26 @@ impl InteruptHandler {
 				0,
 			);
 		}
+
+		self.idt[43] = IdtEntry::new(
+			VAddr::from_usize(ahci_handler as usize),
+			KERNEL_CODE_SELECTOR,
+			Ring::Ring0,
+			Type::InterruptGate,
+			0);
+
+		//  0: 32
+		//  1: 33
+		//  2: 34
+		//  3: 35
+		//  4: 36
+		//  5: 37
+		//  6: 38
+		//  7: 39
+		//  8: 40
+		//  9: 41
+		// 10: 42
+		// 11: 43
 
 		let idtr = DescriptorTablePointer::new(&self.idt);
 		lidt(&idtr);

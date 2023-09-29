@@ -6,12 +6,13 @@
 // copied, modified, or distributed except according to those terms.
 
 use crate::arch::processor::*;
-use crate::consts::*;
+// use crate::consts::*;
 use crate::logging::*;
 use x86::io::*;
 use x86::time::rdtsc;
+use core::sync::atomic::{AtomicU64, Ordering};
 
-const CLOCK_TICK_RATE: u32 = 1193182u32; /* 8254 chip's internal oscillator frequency */
+// const CLOCK_TICK_RATE: u32 = 1193182u32; /* 8254 chip's internal oscillator frequency */
 
 unsafe fn wait_some_time() {
 	let start = rdtsc();
@@ -22,11 +23,27 @@ unsafe fn wait_some_time() {
 	}
 }
 
+static COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Ticks are about 1 ms
+pub fn get_ticks() -> u64
+{
+	COUNTER.load(Ordering::Acquire)
+}
+
+#[doc(hidden)]
+pub fn inc_ticks() -> u64
+{
+	// Returns the old value
+	COUNTER.fetch_add(1, Ordering::AcqRel)
+}
+
 // initialize the Programmable Interrupt controller
 pub fn init() {
 	debug!("initialize timer");
 
-	let latch = ((CLOCK_TICK_RATE + TIMER_FREQ / 2) / TIMER_FREQ) as u16;
+	// 11932
+	// let latch = ((CLOCK_TICK_RATE + TIMER_FREQ / 2) / TIMER_FREQ) as u16;
+	let latch = 1194u16;
 
 	unsafe {
 		/*
