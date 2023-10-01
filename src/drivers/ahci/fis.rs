@@ -54,3 +54,16 @@ pub use pio_setup::*;
 
 mod dma_setup;
 pub use dma_setup::*;
+
+#[repr(C)]
+pub struct HbaFis
+{
+    a: DmaSetup, // As I don't use packed, this is automatically padded to size 0x20, I do not need to insert the padding field like osdev wiki
+    b: PioSetup,
+    _b_pad: [u8; 12],
+    c: RegD2H,
+    _c_pad: [u8; 4],
+    d: [u8; 8], // No clue what FIS_DEV_BITS is, only the size of 8 bytes is documented by comment
+    e: [u8; 64],
+    f: [u8; 0x60],
+}

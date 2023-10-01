@@ -90,7 +90,7 @@ pub fn test()
 	});*/
 
 	drivers::ahci::on_each_device_mut(|_| ahci_count += 1);
-	drivers::ahci::on_each_device(|it| it.debug_print());
+	// drivers::ahci::on_each_device(|it| it.debug_print());
 
 	println!("({}, {}, {}, {}, {})", pci_count, generic_count, card_count, bridge_count, ahci_count);
 

@@ -1,3 +1,5 @@
+// EDIT
+
 // Copyright (c) 2017 Stefan Lankes, RWTH Aachen University
 //
 // Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
@@ -37,12 +39,27 @@ pub fn inc_ticks() -> u64
 	COUNTER.fetch_add(1, Ordering::AcqRel)
 }
 
+pub fn busy_sleep(ms: u64)
+{
+	let wait_until = get_ticks().checked_add(ms).expect("The OS does not currently support running (and by extension waiting) for this long.");
+	loop
+	{
+		if get_ticks() >= wait_until
+		{
+			return;
+		}
+	}
+}
+
 // initialize the Programmable Interrupt controller
 pub fn init() {
 	debug!("initialize timer");
 
 	// 11932
 	// let latch = ((CLOCK_TICK_RATE + TIMER_FREQ / 2) / TIMER_FREQ) as u16;
+	// The above latch evaluates to 11932. This value gets decremented by one each pit tick and causes an interrupt at value 0 (and a reset of the value).
+	// This value with the frequency of CLOCK_TICK_RATE equates to about 10 ms.
+	// Dividing by 10 (1193) cause it to be consistently below 1 ms. With 1194 (+1), it is about 1 ms.
 	let latch = 1194u16;
 
 	unsafe {

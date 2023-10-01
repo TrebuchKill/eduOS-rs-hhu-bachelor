@@ -146,14 +146,29 @@ impl AhciDevice
         let mem = self.get_hba_mem_mut().expect("Failed to load address");
         if mem.ghc.cap2.get_boh()
         {
-            print!("BIOS OS Handoff");
+            #[cfg(debug_assertions)] // Maybe always?
+            serial_println!("BIOS OS Handoff");
             mem.ghc.bohc.set_oos(true);
             loop
             {
-                print!(".");
                 if !mem.ghc.bohc.get_bos()
                 {
-                    println!("!\nWait successful.");
+                    #[cfg(debug_assertions)] // Maybe always?
+                    serial_println!("Wait for BOHC.bos successful");
+
+                    crate::arch::x86_64::kernel::busy_sleep(30); // Doc says 25, but my code is not "perfect" 1 ms. Hope this will compensate enough.
+
+                    let mut tries = 0u32;
+                    while tries < 10 && mem.ghc.bohc.get_bb()
+                    {
+                        tries += 1;
+                        crate::arch::x86_64::kernel::busy_sleep(2000); // Wait the minimum amount of time for the bios to clear this bit, at most 10 times (random choice).
+                    }
+
+                    if tries >= 10 && mem.ghc.bohc.get_bb() // after 10 tries of waiting 2 seconds, the bios busy flag is still set. I choose to timeout this operation at this point.
+                    {
+                        panic!("Bios OS Handoff failed: timeout");
+                    }
                     break;
                 }
             }
@@ -192,6 +207,13 @@ impl AhciDevice
         }
     }
 
+    fn setup_interrupts(&mut self)
+    {
+        let interrupt = self.device.get_interrupt_line();
+        self.device.set_interrupt_line(11);
+        println!("AHCI IRQ: {} => 11 ({})", interrupt, self.device.get_interrupt_line());
+    }
+
     fn enable_ahci_mode_and_interrupts(&mut self)
     {
         let mem = self.get_hba_mem_mut().expect("Failed to load address");
@@ -227,7 +249,11 @@ impl AhciDevice
         {
             if mem.ghc.pi.get(i)
             {
-                println!("Port {:2} implemented", i);
+                let port = &mem.ports[i as usize].value;
+                let status = port.ssts.get();
+                let sig = port.sig.get();
+                println!("DET {:x} IPM {:x} SIG {:x}", status & 0xf, (status & 0xf00) >> 8, sig);
+                // println!("Port {:2} implemented", i);
             }
         }
     }
@@ -246,7 +272,8 @@ impl AhciDevice
         self.reset();
         self.panic_on_yet_to_support();
 
-        println!("TODO: Setup interrupts");
+        // println!("TODO: Setup interrupts");
+        self.setup_interrupts();
         self.enable_ahci_mode_and_interrupts();
         self.init_ports();
 

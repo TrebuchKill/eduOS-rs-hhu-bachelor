@@ -340,7 +340,7 @@ extern "x86-interrupt" fn timer_handler(stack_frame: ExceptionStackFrame) {
 	let old = super::pit::inc_ticks();
 	if old % 10 == 0
 	{
-		serial_print!("!"); // 10027 µs = 10.027 ms
+		// serial_print!("!"); // 10027 µs = 10.027 ms
 		schedule();
 	}
 }

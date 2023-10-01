@@ -1,3 +1,5 @@
+// EDIT
+
 // Copyright (c) 2017-2018 Stefan Lankes, RWTH Aachen University
 //
 // Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
@@ -14,6 +16,12 @@ mod start;
 pub mod switch;
 mod syscall;
 pub mod task;
+
+pub use pit::{
+
+	busy_sleep,
+	get_ticks
+};
 
 pub use crate::arch::x86_64::kernel::syscall::syscall_handler;
 use crate::consts::USER_SPACE_START;
