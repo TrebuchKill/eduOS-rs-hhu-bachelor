@@ -16,9 +16,9 @@ macro_rules! serial_print
 #[macro_export]
 macro_rules! serial_println
 {
-	() => ($crate::macros::serial_print!("\n"));
-	($fmt:expr) => ($crate::macros::serial_print!(concat!($fmt, "\n")));
-	($fmt:expr, $($arg:tt)*) => ($crate::macros::serial_print!(concat!($fmt, "\n"), $($arg)*));
+	() => ($crate::serial_print!("\n"));
+	($fmt:expr) => ($crate::serial_print!(concat!($fmt, "\n")));
+	($fmt:expr, $($arg:tt)*) => ($crate::serial_print!(concat!($fmt, "\n"), $($arg)*));
 }
 
 #[macro_export]
@@ -30,9 +30,9 @@ macro_rules! vga_print
 #[macro_export]
 macro_rules! vga_println
 {
-	() => ($crate::macros::vga_print!("\n"));
-	($fmt:expr) => ($crate::macros::vga_print(concat!($fmt, "\n")));
-	($fmt:expr, $($arg:tt)*) => ($crate::macros::vga_print(concat!($fmt, "\n"), $($arg)*));
+	() => ($crate::vga_print!("\n"));
+	($fmt:expr) => ($crate::vga_print!(concat!($fmt, "\n")));
+	($fmt:expr, $($arg:tt)*) => ($crate::vga_print!(concat!($fmt, "\n"), $($arg)*));
 }
 
 #[macro_export]
