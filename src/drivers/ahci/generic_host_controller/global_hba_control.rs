@@ -34,8 +34,6 @@ impl GlobalHbaControl
     /// This is an illegal operation, when CAP.SAM is set.
     /// 
     /// This precondition is not checked by this function.
-    /// 
-    /// TODO: Writing 0 into this field needs to zero out these 32 bits
     pub unsafe fn with_ae(mut self, value: bool) -> Self
     {
         self.set_ae(value);
@@ -49,8 +47,6 @@ impl GlobalHbaControl
     /// This is an illegal operation, when CAP.SAM is set.
     /// 
     /// This precondition is not checked by this function.
-    /// 
-    /// TODO: Writing 0 into this field needs to zero out these 32 bits
     pub unsafe fn set_ae(&mut self, value: bool)
     {
         const SET_MASK: u32 = 1u32 << 31;
@@ -60,7 +56,11 @@ impl GlobalHbaControl
         }
         else
         {
-            self.0 &= !SET_MASK;
+            // Quote 3.1.2:
+            //   When software clears this bit to 0 from a previous value of 1 , it shall set no other bit in the GHC register (this struct) as part of that operation
+            //   (i.e., clearing the AE bit requires software to write 00000000h to the register).
+            // End Quote
+            self.0.set(0);
         }
     }
 
@@ -86,18 +86,14 @@ impl GlobalHbaControl
     /// Interrupt Enable
     pub fn set_ie(&mut self, value: bool)
     {
-        const SET_MASK: u32 = 1u32 << 1;
-        if value
-        {
-            self.0 |= SET_MASK;
-        }
-        else
-        {
-            self.0 &= !SET_MASK;
-        }
+        // fc: discard the lowest 2 bits from the read value
+        // 0: RW1, while not explicitly set, always write 0
+        // 1: the bit we want to set
+        const SET_MASK: u32 = 0xff_ff_ff_fc;
+        self.0.set((self.0.get() & SET_MASK) | if value { 2 } else { 0 });
     }
 
-    /// HBA Reset
+    /// HBA Reset, RW1
     pub fn get_hr(&self) -> bool
     {
         self.0.get() & 1u32 != 0
