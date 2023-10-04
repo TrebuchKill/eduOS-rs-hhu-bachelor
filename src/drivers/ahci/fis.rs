@@ -55,15 +55,18 @@ pub use pio_setup::*;
 mod dma_setup;
 pub use dma_setup::*;
 
+mod command_list_structure;
+pub use command_list_structure::*;
+
 #[repr(C)]
-pub struct HbaFis
+pub struct ReceivedFis
 {
-    a: DmaSetup, // As I don't use packed, this is automatically padded to size 0x20, I do not need to insert the padding field like osdev wiki
-    b: PioSetup,
-    _b_pad: [u8; 12],
-    c: RegD2H,
-    _c_pad: [u8; 4],
-    d: [u8; 8], // No clue what FIS_DEV_BITS is, only the size of 8 bytes is documented by comment
-    e: [u8; 64],
-    f: [u8; 0x60],
+    dsfis: DmaSetup, // As I don't use packed, this is automatically padded to size 0x20, I do not need to insert the padding field like osdev wiki
+    psfis: PioSetup,
+    _psfis_pad: Register<[u8; 12]>,
+    rfis: RegD2H,
+    _rfis_pad: Register<[u8; 4]>,
+    sdbfis: Register<[u8; 8]>, // No clue what FIS_DEV_BITS is, only the size of 8 bytes is documented by comment
+    ufis: Register<[u8; 64]>,
+    reserved: Register<[u8; 0x60]>,
 }

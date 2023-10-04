@@ -6,10 +6,10 @@ use super::Type;
 #[repr(C)]
 pub struct Data
 {
-    fis_type: Register<Type>,
+    pub fis_type: Register<Type>,
     
     /// pmport 7:4, reserved 3:0
-    pmport: Register<u8>,
+    pub pmport: Register<u8>,
 
     /// Reserved
     reserved: Register<[u8; 2]>,
@@ -21,7 +21,7 @@ pub struct Data
     // I opted for the redox way, as it makes initializing the data easier
 
     /// Payload
-    data: [Register<u8>; 262]
+    pub data: [Register<u8>; 262]
 }
 
 impl Data

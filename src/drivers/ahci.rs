@@ -184,24 +184,25 @@ impl AhciDevice
     /// - all port register fields except fields intiallized by hardware (HwInit) and PxFB/PxFBU/PxCLB/PxCLBU and 
     fn reset(&mut self)
     {
-        let vaddr = self.abar_vaddr;
-        let size = self.abar_actual_size;
+        // let vaddr = self.abar_vaddr;
+        // let size = self.abar_actual_size;
         let mem = self.get_hba_mem_mut().expect("Failed to load address");
-        println!("Resetting HBA...");
-        println!(
+        print!("Resetting HBA");
+        /*println!(
             "{:#016x}\n{:#016x}\n{:#016x}",
             vaddr,
             size,
-            mem as *mut _ as *const () as usize);
+            mem as *mut _ as *const () as usize);*/
         mem.ghc.ghc.set_hr();
-        print!("Waiting...");
+        // print!("Waiting...");
         loop 
         {
             print!(".");
             // After a second consider HBA in locked/hung state
             if !mem.ghc.ghc.get_hr()
             {
-                println!("!\nReset successful!");
+                // println!("!\nReset successful!");
+                println!("OK");
                 break;
             }
         }
@@ -220,7 +221,7 @@ impl AhciDevice
         
         // Enable ahci mode only if legacy mode is supported
         // Otherwise it should be already on and writing is undefined
-        if !mem.ghc.ghc.get_ae() && !mem.ghc.cap.get_sam()
+        if !mem.ghc.cap.get_sam() && !mem.ghc.ghc.get_ae()
         {
             unsafe { mem.ghc.ghc.set_ae(true) }
         }
@@ -241,23 +242,83 @@ impl AhciDevice
 
     fn init_ports(&mut self)
     {
+        use crate::arch::x86_64::mm::{
+            paging::map,
+            physicalmem,
+            virtualmem
+        };
         let mem = self.get_hba_mem_mut().expect("Failed to load address");
-        let number_of_command_slots = mem.ghc.cap.get_ncs_adjusted();
-        let number_of_ports = mem.ghc.cap.get_np_adjusted();
-        println!("NCS: {}, NP: {}", number_of_command_slots, number_of_ports);
+        // let number_of_command_slots = mem.ghc.cap.get_ncs_adjusted();
+        // let number_of_ports = mem.ghc.cap.get_np_adjusted();
+
+        // let spin_up = mem.ghc.cap.get_sss();
+        // println!("NCS: {}, NP: {}", number_of_command_slots, number_of_ports);
         for i in 0u8..32u8
         {
             if mem.ghc.pi.get(i)
             {
-                let port = &mem.ports[i as usize].value;
+                // bail on atapi? port.cmd.get_atapi
+
+                let port = &mut mem.ports[i as usize];
+
+                port.cmd.get_st();
+
                 let status = port.ssts.get();
                 let sig = port.sig.get();
-                println!("DET {:x} IPM {:x} SIG {:x}", status & 0xf, (status & 0xf00) >> 8, sig);
-                // println!("Port {:2} implemented", i);
+                let clb = ((port.clbu.get() as u64) << 32) | (port.clb.get() as u64);
+                let fb = ((port.fbu.get() as u64) << 32) | (port.fb.get() as u64);
+
+                const ADDRESS_MASK: usize = (!0u32) as usize;
+                let new_clb = physicalmem::allocate(4096);
+                let new_fb = physicalmem::allocate(4096);
+
+                println!("CLB: {:#x} => {:#x}", clb, new_clb);
+                println!("FB:  {:#x} => {:#x}", fb, new_fb);
+
+                // This code is currently only supports x86_64, therefor a cfg guard does not make sense
+                if !mem.ghc.cap.get_s64a() && (new_clb > 0xff_ff_ff_ffusize || new_fb > 0xff_ff_ff_ffusize)
+                {
+                    physicalmem::deallocate(new_clb, 4096);
+                    physicalmem::deallocate(new_fb, 4096);
+                    println!("Could not move memory (new address is 64 bit while the HBA does not support 64 bit).");
+                }
+                else
+                {
+                    port.fb.set((new_fb & 0x00_00_00_00_ff_ff_ff_ffusize) as u32);
+                    port.fbu.set(((new_fb & 0xff_ff_ff_ff_00_00_00_00usize) >> 32) as u32);
+
+                    port.clb.set((new_clb & 0xff_ff_ff_ff) as u32);
+                    port.clbu.set(((new_clb & 0xff_ff_ff_ff_00_00_00_00usize) >> 32) as u32);
+
+                    let vclb = virtualmem::allocate(4096);
+                    let vfb = virtualmem::allocate(4096);
+
+                    map::<BasePageSize>(vclb, new_clb, 1, PageTableEntryFlags::CACHE_DISABLE | PageTableEntryFlags::WRITABLE | PageTableEntryFlags::WRITE_THROUGH);
+                    map::<BasePageSize>(vfb, new_fb, 1, PageTableEntryFlags::CACHE_DISABLE | PageTableEntryFlags::WRITABLE | PageTableEntryFlags::WRITE_THROUGH);
+                }
+
+                /*println!("Port {:2} CLB {:#x} FB {:#x}", i, clb, fb);
+                println!("   128? {} {}", (clb & !127u64) == clb,  (fb & !127u64) == fb);
+                println!("   256? {} {}", (clb & !255u64) == clb,  (fb & !255u64) == fb);
+                println!("   512? {} {}", (clb & !511u64) == clb,  (fb & !511u64) == fb);
+                println!("  1024? {} {}", (clb & !1023u64) == clb, (fb & !1023u64) == fb);
+                println!("  2048? {} {}", (clb & !2047u64) == clb, (fb & !2047u64) == fb);
+                println!("  4096? {} {}", (clb & !4095u64) == clb, (fb & !4095u64) == fb);*/
+                /*if port.cmd.get_cpd() // If cold presence is supported...
+                {
+                    if port.cmd.get_cps() // ... and cold presence is detected...
+                    {
+                        port.cmd.set_pod(true); // power on the device
+                    }
+                }*/
+                
             }
         }
     }
 
+    // OS Dev wiki and 10.1.2 disagree
+    // 10.1.2 makes the first step enabling AHCI Mode (which makes sense, as bios os handoff and reset are part of the ahci protocol)
+    // but the wiki puts them before ensuring AHCI Mode is enabled
     fn init(&mut self)
     {
         // Enable Inte
@@ -357,18 +418,18 @@ impl AhciDevice
                 let port = &it.ports[i as usize];
                 println!("Port {:2}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
                     i,
-                    "clb", port.value.clb,
-                    "clbu", port.value.clbu,
-                    "fb", port.value.fb,
-                    "fbu", port.value.fbu,
-                    "is", port.value.is,
-                    "ie", port.value.ie,
-                    "cmd", port.value.cmd,
-                    "tfd", port.value.tfd,
-                    "sig", port.value.sig,
-                    "ssts", port.value.ssts,
-                    "sctl", port.value.sctl,
-                    "serr", port.value.serr
+                    "clb", port.clb,
+                    "clbu", port.clbu,
+                    "fb", port.fb,
+                    "fbu", port.fbu,
+                    "is", port.is,
+                    "ie", port.ie,
+                    "cmd", port.cmd,
+                    "tfd", port.tfd,
+                    "sig", port.sig,
+                    "ssts", port.ssts,
+                    "sctl", port.sctl,
+                    "serr", port.serr
                 );
             }
         }
@@ -444,7 +505,7 @@ pub struct HbaMemory
     /// At least <TODO> ports must be present, at most 32 ports can be present.
     /// 
     /// Ports in the docs (and in this field) are numerated from 0 to 31
-    pub ports: [AlignedPortRegisters]
+    pub ports: [PortRegister]
 }
 
 static DEVICES: Spinlock<alloc::vec::Vec<AhciDevice>> = Spinlock::new(alloc::vec::Vec::new());
@@ -462,7 +523,14 @@ pub fn init()
         {
             devices.push(dev);
         }
-    })
+    });
+    /*if let Some(it) = unsafe { crate::arch::x86_64::kernel::BOOT_INFO }
+    {
+        for it in it.memory_map.iter()
+        {
+            println!("{:?} {:#x}..{:#x}", it.region_type, it.range.start_addr(), it.range.end_addr());
+        }
+    }*/
 }
 
 pub fn on_each_device<F>(fun: F)

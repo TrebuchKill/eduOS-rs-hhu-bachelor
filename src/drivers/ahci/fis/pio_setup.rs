@@ -4,43 +4,43 @@ use super::Type;
 #[repr(C)]
 pub struct PioSetup
 {
-    fis_type: Register<Type>,
+    pub fis_type: Register<Type>,
     /// 7:4 Port Multiplier, 3 Reserved, 2 Transfer Direction (1 = device to host), 1 Interrupt Bit, 0 Reserved
-    pmport_di: Register<u8>,
+    pub pmport_di: Register<u8>,
     /// Status Register
-    status: Register<u8>,
+    pub status: Register<u8>,
     /// Error Register
-    error: Register<u8>,
+    pub error: Register<u8>,
 
     /// LBA low register, Bits 7:0
-    lba0: Register<u8>,
+    pub lba0: Register<u8>,
     /// LBA mid register, Bits 15:8
-    lba1: Register<u8>,
+    pub lba1: Register<u8>,
     /// LBA high register, 23:16
-    lba2: Register<u8>,
+    pub lba2: Register<u8>,
     /// Device Register
-    device: Register<u8>,
+    pub device: Register<u8>,
 
     /// LBA Register, Bits 31:24
-    lba3: Register<u8>,
+    pub lba3: Register<u8>,
     /// LBA Register, Bits 39:32
-    lba4: Register<u8>,
+    pub lba4: Register<u8>,
     /// LBA Register, Bits 47:40
-    lba5: Register<u8>,
+    pub lba5: Register<u8>,
     /// Reserved
     reserved_0: Register<u8>,
 
     /// Count Register, Bits 7:0
-    countl: Register<u8>,
+    pub countl: Register<u8>,
     /// Count Register, Bits 15:8
-    counth: Register<u8>,
+    pub counth: Register<u8>,
     /// Reserved
     reserved_1: Register<u8>,
     /// New value of status register
-    e_status: Register<u8>,
+    pub e_status: Register<u8>,
 
     /// Transfer Count
-    tc: Register<u16>,
+    pub tc: Register<u16>,
     /// Reserved
     reserved_2: Register<[u8; 2]>
 }

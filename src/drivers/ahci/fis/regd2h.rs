@@ -7,46 +7,46 @@ use super::Type;
 #[repr(C)]
 pub struct RegD2H
 {
-    fis_type: Register<Type>,
+    pub fis_type: Register<Type>,
 
     /// pmport 7:4, reserved 3:2, interrupt 1, reserved 0
-    pmport_cc: Register<u8>,
+    pub pmport_cc: Register<u8>,
 
     /// Status Register
-    status: Register<u8>,
+    pub status: Register<u8>,
 
     /// Error Register
-    error: Register<u8>,
+    pub error: Register<u8>,
 
     /// LBA low Register, 7:0
-    lba0: Register<u8>,
+    pub lba0: Register<u8>,
 
     /// LBA mid Register, 15:8
-    lba1: Register<u8>,
+    pub lba1: Register<u8>,
 
     /// LBA high Register, 23:16
-    lba2: Register<u8>,
+    pub lba2: Register<u8>,
 
     /// Device Register
-    device: Register<u8>,
+    pub device: Register<u8>,
 
     /// LBA Register, 31:24
-    lba3: Register<u8>,
+    pub lba3: Register<u8>,
 
     /// LBA Register, 39:32
-    lba4: Register<u8>,
+    pub lba4: Register<u8>,
 
     /// LBA Register, 47:40
-    lba5: Register<u8>,
+    pub lba5: Register<u8>,
 
     /// Reserved
     reserved_0: Register<u8>,
 
     /// Count Register: Bits 7:0
-    countl: Register<u8>,
+    pub countl: Register<u8>,
 
     /// Count Register: Bits 15:8
-    counth: Register<u8>,
+    pub counth: Register<u8>,
 
     /// Reserved
     reserved_1: Register<u8>,
