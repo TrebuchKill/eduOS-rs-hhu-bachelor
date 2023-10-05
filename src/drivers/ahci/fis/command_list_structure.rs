@@ -13,22 +13,26 @@ pub struct CommandListStructure
 
 impl CommandListStructure
 {
+    /// Physical region descriptor table length in entries
     pub fn get_prdtl(&self) -> u16
     {
         (self.data[0].get() & 0xff_ff_00_00 >> 16) as u16
     }
 
+    /// Physical region descriptor table length in entries
     pub fn set_prdtl(&mut self, value: u16)
     {
         let register = &mut self.data[0];
         register.set((register.get() & 0x00_00_ff_ff) | ((value as u32) << 16));
     }
 
+    /// Port Multiplier Port
     pub fn get_pmp(&self) -> u8
     {
         (self.data[0].get() & 0x00_00_f0_00 >> 12) as u8
     }
 
+    /// Port Multiplier Port
     pub fn set_pmp(&mut self, value: u8)
     {
         // TODO: check value in range
@@ -120,11 +124,13 @@ impl CommandListStructure
         register.set(if value { register.get() | MASK } else { register.get() & !MASK });
     }
 
+    /// Command Fis Length in DWORDS, 2 ~ 16
     pub fn get_cfl(&self) -> u8
     {
         (self.data[0].get() & 0x00_00_00_1f) as u8
     }
 
+    /// Command Fis Length in DWORDS, 2 ~ 16
     pub fn set_cfl(&mut self, value: u8)
     {
         assert_eq!(value & 0x1f, value);
@@ -144,23 +150,29 @@ impl CommandListStructure
         self.data[1].set(value);
     }
 
+    /// Command table descriptor base address
     pub fn get_ctba(&self) -> u32
     {
         self.data[2].get()
     }
 
+    /// Command table descriptor base address
     pub fn set_ctba(&mut self, value: u32)
     {
-        assert_eq!(value & 0xff_ff_ff_80, value, "value must be 128-byte cache line aligned.");
+        debug_assert_eq!(value & 0xff_ff_ff_80, value, "value must be 128-byte cache line aligned.");
         self.data[2].set(value);
     }
 
+    /// Command table descriptor base address
+    /// 
     /// Unsafe Note: Only valid for a HBA which has S64A set.
     pub unsafe fn get_ctbau(&self) -> u32
     {
         self.data[3].get()
     }
 
+    /// Command table descriptor base address
+    /// 
     /// Unsafe Note: Only valid for a HBA which has S64A set.
     pub unsafe fn set_ctbau(&mut self, value: u32)
     {

@@ -58,6 +58,10 @@ pub use dma_setup::*;
 mod command_list_structure;
 pub use command_list_structure::*;
 
+mod command_table;
+pub use command_table::*;
+
+/// The PxFB\[U\] points to memory containing this struct
 #[repr(C)]
 pub struct ReceivedFis
 {
@@ -66,7 +70,8 @@ pub struct ReceivedFis
     _psfis_pad: Register<[u8; 12]>,
     rfis: RegD2H,
     _rfis_pad: Register<[u8; 4]>,
-    sdbfis: Register<[u8; 8]>, // No clue what FIS_DEV_BITS is, only the size of 8 bytes is documented by comment
+    sdbfis: Register<[u8; 8]>, // No clue what FIS_DEV_BITS is, only the size of 8 bytes is documented by comment in the osdev wiki, in the docs "Set Device Bits FIS"
+    /// Unknown FIS
     ufis: Register<[u8; 64]>,
     reserved: Register<[u8; 0x60]>,
 }

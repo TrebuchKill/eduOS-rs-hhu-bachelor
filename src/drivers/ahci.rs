@@ -274,6 +274,9 @@ impl AhciDevice
 
                 println!("CLB: {:#x} => {:#x}", clb, new_clb);
                 println!("FB:  {:#x} => {:#x}", fb, new_fb);
+                let mut fis = fis::RegH2D::default();
+                fis.command.set(0xEC); // ATA_CMD_IDENTIFY
+                fis.pmport_cc.set(1); // pmport 0, c 1
 
                 // This code is currently only supports x86_64, therefor a cfg guard does not make sense
                 if !mem.ghc.cap.get_s64a() && (new_clb > 0xff_ff_ff_ffusize || new_fb > 0xff_ff_ff_ffusize)
