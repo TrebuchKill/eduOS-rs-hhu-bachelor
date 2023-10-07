@@ -26,6 +26,15 @@ impl InterruptStatus
         self.0.get()
     }
 
+    /// Clears all the bits, which are not resereved and are cleared through a write of 1.
+    /// 
+    /// Notable exception (unexhaustive list): PhyRdy Change Status (PRCS): Cleared by `PxSERR.DIAG.N`
+    pub fn clear_all(&mut self)
+    {
+        // All clearable (Type RWC) bits are 1
+        self.0.set(0xfd_80_00_afu32);
+    }
+
     /// Cold Port Detect Status
     pub fn get_cpds(&self) -> bool
     {

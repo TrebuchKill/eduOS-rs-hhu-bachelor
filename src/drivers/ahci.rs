@@ -215,7 +215,8 @@ impl AhciDevice
         println!("AHCI IRQ: {} => 11 ({})", interrupt, self.device.get_interrupt_line());
     }
 
-    fn enable_ahci_mode_and_interrupts(&mut self)
+    // Change: 10.1.2 "recommends" to always clear the port specific IS register first, then the corresponding HBA IS.IPS.
+    /*fn enable_ahci_mode_and_interrupts(&mut self)
     {
         let mem = self.get_hba_mem_mut().expect("Failed to load address");
         
@@ -225,6 +226,28 @@ impl AhciDevice
         {
             unsafe { mem.ghc.ghc.set_ae(true) }
         }
+
+        // Change: 10.1.2 "recommends" to always clear the port specific IS register first, then the corresponding HBA IS.IPS.
+        // I will enable interrupts after the second step.
+        // Enable interrupts
+        mem.ghc.ghc.set_ie(true);
+    }*/
+
+    fn enable_ahci_mode(&mut self)
+    {
+        let mem = self.get_hba_mem_mut().expect("Failed to load address");
+        
+        // Enable ahci mode only if legacy mode is supported
+        // Otherwise it should be already on and writing is undefined
+        if !mem.ghc.cap.get_sam() && !mem.ghc.ghc.get_ae()
+        {
+            unsafe { mem.ghc.ghc.set_ae(true) }
+        }
+    }
+
+    fn enable_interrupts(&mut self)
+    {
+        let mem = self.get_hba_mem_mut().expect("Failed to load address");
 
         // Enable interrupts
         mem.ghc.ghc.set_ie(true);
@@ -258,8 +281,18 @@ impl AhciDevice
             if mem.ghc.pi.get(i)
             {
                 // bail on atapi? port.cmd.get_atapi
+                println!("Handling port {}", i);
 
-                let _ = ports::Port::init(&mut mem.ports[i as usize], mem.ghc.cap.get_s64a(), i);
+                let port = &mut mem.ports[i as usize];
+                // println!("- Init");
+                let _ = ports::Port::init(port, mem.ghc.cap.get_s64a(), mem.ghc.cap.get_ncs_adjusted(), i);
+                // println!("- HBA Clear");
+                mem.ghc.is.clear(i);
+                // println!("- Interrupts");
+                ports::Port::setup_interrupts(port, i);
+                // println!("- Start");
+                ports::Port::first_start(port);
+                // println!("Done");
 
                 /*let port = &mut mem.ports[i as usize];
 
@@ -324,8 +357,9 @@ impl AhciDevice
 
         // println!("TODO: Setup interrupts");
         self.setup_interrupts();
-        self.enable_ahci_mode_and_interrupts();
+        self.enable_ahci_mode();
         self.init_ports();
+        self.enable_interrupts();
 
         /*let addr = MemSpaceBarValue::try_from(self.device.get_bar_5()).unwrap();
         let size = self.device.get_bar_5_size();

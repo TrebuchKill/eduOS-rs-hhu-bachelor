@@ -175,7 +175,7 @@ impl InterruptEnable
     }
 
     /// Incorrect Port Multiplier Status
-    pub fn set_imps(&mut self, value: bool)
+    pub fn set_ipms(&mut self, value: bool)
     {
         const MASK: u32 = 1u32 << 23;
         if value

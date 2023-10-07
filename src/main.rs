@@ -46,7 +46,12 @@ pub extern "C" fn main() -> ! {
 	mm::init();
 	scheduler::init();
 	fs::init();
+	// My busy_wait function requires the pit, which requires interrupts.
+	// this is why I enable them
+	// I need to look into it, but test seem to be fine.
+	arch::irq::irq_enable();
 	drivers::init();
+	arch::irq::irq_disable();
 
 	println!("Hello from eduOS-rs!");
 
