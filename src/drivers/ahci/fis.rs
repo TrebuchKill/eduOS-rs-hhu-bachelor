@@ -62,16 +62,40 @@ mod command_table;
 pub use command_table::*;
 
 /// The PxFB\[U\] points to memory containing this struct
+/// 
+/// PxFB must be 256 byte aligned (the size of the structure), with one exception.
+/// 
+/// If FIS-based switching is being used, it has to be 4096 byte aligned and the length will be extended to 4096.
+/// 
+/// FIS-based switching is currently unsupported.
 #[repr(C)]
 pub struct ReceivedFis
 {
-    dsfis: DmaSetup, // As I don't use packed, this is automatically padded to size 0x20, I do not need to insert the padding field like osdev wiki
-    psfis: PioSetup,
+    pub dsfis: DmaSetup, // As I don't use packed, this is automatically padded to size 0x20, I do not need to insert the padding field like osdev wiki
+    pub psfis: PioSetup,
     _psfis_pad: Register<[u8; 12]>,
-    rfis: RegD2H,
+    pub rfis: RegD2H,
     _rfis_pad: Register<[u8; 4]>,
-    sdbfis: Register<[u8; 8]>, // No clue what FIS_DEV_BITS is, only the size of 8 bytes is documented by comment in the osdev wiki, in the docs "Set Device Bits FIS"
+    pub sdbfis: Register<[u8; 8]>, // No clue what FIS_DEV_BITS is, only the size of 8 bytes is documented by comment in the osdev wiki, in the docs "Set Device Bits FIS"
     /// Unknown FIS
-    ufis: Register<[u8; 64]>,
-    reserved: Register<[u8; 0x60]>,
+    pub ufis: Register<[u8; 64]>,
+    _reserved: Register<[u8; 0x60]>,
+}
+
+impl ReceivedFis
+{
+    pub const fn default() -> Self
+    {
+        Self {
+
+            dsfis: DmaSetup::default(),
+            psfis: PioSetup::default(),
+            _psfis_pad: Register::new([0u8; 12]),
+            rfis: RegD2H::default(),
+            _rfis_pad: Register::new([0u8; 4]),
+            sdbfis: Register::new([0u8; 8]),
+            ufis: Register::new([0u8; 64]),
+            _reserved: Register::new([0u8; 0x60])
+        }
+    }
 }

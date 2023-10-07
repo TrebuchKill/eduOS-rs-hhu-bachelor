@@ -259,7 +259,9 @@ impl AhciDevice
             {
                 // bail on atapi? port.cmd.get_atapi
 
-                let port = &mut mem.ports[i as usize];
+                let _ = ports::Port::init(&mut mem.ports[i as usize], mem.ghc.cap.get_s64a(), i);
+
+                /*let port = &mut mem.ports[i as usize];
 
                 port.cmd.get_st();
 
@@ -274,11 +276,11 @@ impl AhciDevice
 
                 println!("CLB: {:#x} => {:#x}", clb, new_clb);
                 println!("FB:  {:#x} => {:#x}", fb, new_fb);
-                let mut fis = fis::RegH2D::default();
-                fis.command.set(0xEC); // ATA_CMD_IDENTIFY
-                fis.pmport_cc.set(1); // pmport 0, c 1
+                // let mut fis = fis::RegH2D::default();
+                // fis.command.set(0xEC); // ATA_CMD_IDENTIFY
+                // fis.pmport_cc.set(1); // pmport 0, c 1
 
-                // This code is currently only supports x86_64, therefor a cfg guard does not make sense
+                // All the code currently supports only x86_64, therefor a cfg guard does not make sense
                 if !mem.ghc.cap.get_s64a() && (new_clb > 0xff_ff_ff_ffusize || new_fb > 0xff_ff_ff_ffusize)
                 {
                     physicalmem::deallocate(new_clb, 4096);
@@ -298,23 +300,7 @@ impl AhciDevice
 
                     map::<BasePageSize>(vclb, new_clb, 1, PageTableEntryFlags::CACHE_DISABLE | PageTableEntryFlags::WRITABLE | PageTableEntryFlags::WRITE_THROUGH);
                     map::<BasePageSize>(vfb, new_fb, 1, PageTableEntryFlags::CACHE_DISABLE | PageTableEntryFlags::WRITABLE | PageTableEntryFlags::WRITE_THROUGH);
-                }
-
-                /*println!("Port {:2} CLB {:#x} FB {:#x}", i, clb, fb);
-                println!("   128? {} {}", (clb & !127u64) == clb,  (fb & !127u64) == fb);
-                println!("   256? {} {}", (clb & !255u64) == clb,  (fb & !255u64) == fb);
-                println!("   512? {} {}", (clb & !511u64) == clb,  (fb & !511u64) == fb);
-                println!("  1024? {} {}", (clb & !1023u64) == clb, (fb & !1023u64) == fb);
-                println!("  2048? {} {}", (clb & !2047u64) == clb, (fb & !2047u64) == fb);
-                println!("  4096? {} {}", (clb & !4095u64) == clb, (fb & !4095u64) == fb);*/
-                /*if port.cmd.get_cpd() // If cold presence is supported...
-                {
-                    if port.cmd.get_cps() // ... and cold presence is detected...
-                    {
-                        port.cmd.set_pod(true); // power on the device
-                    }
                 }*/
-                
             }
         }
     }

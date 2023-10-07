@@ -5,14 +5,26 @@ use crate::drivers::Register;
 // the chapter and the graphic title call it "Command List Structure"
 // Inside the graphic it is called the "command header", and the struct in C code is called "HBA_CMD_HEADER"
 
+pub type CommandListStructure = [CommandHeader; 32];
+
 #[repr(C)]
-pub struct CommandListStructure
+pub struct CommandHeader
 {
     pub data: [Register<u32>; 8],
 }
 
-impl CommandListStructure
+impl CommandHeader
 {
+    #[doc(hidden)]
+    pub const fn new() -> Self
+    {
+        const TEMPLATE: Register<u32> = Register::new(0);
+        Self {
+
+            data: [TEMPLATE; 8]
+        }
+    }
+
     /// Physical region descriptor table length in entries
     pub fn get_prdtl(&self) -> u16
     {
