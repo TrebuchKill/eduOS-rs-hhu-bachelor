@@ -36,6 +36,43 @@ pub fn init() {
 	}
 }
 
+pub fn debug_print()
+{
+	println!("FREE:");
+	for item in unsafe { PHYSICAL_FREE_LIST.list.iter() }
+	{
+		println!("- {:#x}..{:#x}", item.start, item.end);
+	}
+}
+
+pub fn reserve(physical_address: usize, count: u32)
+{
+	// A frame should never be partially in use
+	// Two frames could be in different ranges
+	// Two frames could be in different states (free or allocated/reserved)
+	// Reserving Frame by Frame allows us to reserve for example 3 frames, where one or two are already "in use", no matter where in the frame order.
+
+	assert!(count > 0);
+	assert!(
+		physical_address % BasePageSize::SIZE == 0,
+		"The physical address {:#X} is not a multiple of {:#X}",
+		physical_address,
+		BasePageSize::SIZE
+	);
+
+	// Disables irq on creation, enables them when needed on drop
+	let _preemption = DisabledPreemption::new();
+	for i in 0..count
+	{
+		let addr = physical_address + (BasePageSize::SIZE * (i as usize));
+		let it = unsafe { PHYSICAL_FREE_LIST.reserve(addr, BasePageSize::SIZE) };
+		if it.is_err()
+		{
+			warn!("Reserving failed: {:#x}", addr);
+		}
+	}
+}
+
 pub fn allocate(size: usize) -> usize {
 	assert!(size > 0);
 	assert!(

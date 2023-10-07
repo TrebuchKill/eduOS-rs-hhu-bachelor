@@ -120,8 +120,8 @@ impl AhciDevice
         // Like the macro in src/macros.rs
         let size_page_aligned = (size + 0x0f_ff) & !0x0f_ffu32;
 
-        #[cfg(debug_assertions)]
-        println!("({:08x}, {:08x}, {:08x})", addr.address(), size, size_page_aligned);
+        // #[cfg(debug_assertions)]
+        // println!("({:08x}, {:08x}, {:08x})", addr.address(), size, size_page_aligned);
 
         debug_assert_eq!(Ok(addr), self.device.get_bar_5().try_into());
 
