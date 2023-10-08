@@ -228,6 +228,7 @@ pub fn scan_bus() -> alloc::vec::Vec<devices::AnyDevice>
     PciScanner::new().collect()
 }
 
+// When I add paging, and this gets put on disk, what will happen?
 static DEVICES: Spinlock<alloc::vec::Vec<devices::AnyDevice>> = Spinlock::new(alloc::vec::Vec::new());
 
 pub fn init()

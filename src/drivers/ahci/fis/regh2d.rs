@@ -4,9 +4,12 @@ use crate::drivers::Register;
 use super::Type;
 
 // May I regret not adding packed (here or anywhere else)? On x86 I doubt that, as sizes and alignment of types fit perfectly, but on other platforms?
+
+// FLAW: this things will be copied into memory, therefor they don't need this Register<u8> thing.
 #[repr(C)]
 pub struct RegH2D
 {
+    // DWORD 0
     pub fis_type: Register<Type>,
 
     /// pmport 7:4, reserved 3:1, 0: (1 = Command) (0 = Control)
@@ -18,6 +21,7 @@ pub struct RegH2D
     /// Feature Register 7:0
     pub featurel: Register<u8>,
 
+    // DWORD 1
     /// LBA low Register, 7:0
     pub lba0: Register<u8>,
 
@@ -30,6 +34,7 @@ pub struct RegH2D
     /// Device Register
     pub device: Register<u8>,
 
+    // DWORD 2
     /// LBA Register, 31:24
     pub lba3: Register<u8>,
 
@@ -42,6 +47,7 @@ pub struct RegH2D
     /// Feature Register, Bits 15:8
     pub featureh: Register<u8>,
 
+    // DWORD 3
     /// Count Register: Bits 7:0
     pub countl: Register<u8>,
 
@@ -54,6 +60,7 @@ pub struct RegH2D
     /// Control Register
     pub control: Register<u8>,
 
+    // DWORD 4
     /// Reserved
     reserved: Register<[u8; 4]>
 }
@@ -91,3 +98,40 @@ impl Default for RegH2D
         Self::default()
     }
 }
+
+// impl Into<[Register<u8>; 64]> for RegH2D
+// {
+//     fn into(self) -> [Register<u8>; 64]
+//     {
+//         /*use core::mem::MaybeUninit;
+//         
+//         let mut it = MaybeUninit::uninit_array();
+// 
+//         it[0].write(Register::new(self.fis_type.get() as u8));
+//         it[1].write(self.pmport_cc.clone());
+//         it[2].write(self.command.clone());
+//         it[3].write(self.featurel.clone());
+// 
+//         it[4].write(self.lba0.clone());
+//         it[5].write(self.lba1.clone());
+//         it[6].write(self.lba2.clone());
+//         it[7].write(self.device.clone());
+// 
+//         it[8].write(self.lba3.clone());
+//         it[9].write(self.lba4.clone());
+//         it[10].write(self.lba5.clone());
+//         it[11].write(self.featureh.clone());
+// 
+//         it[12].write(self.countl.clone());
+//         it[13].write(self.counth.clone());
+//         it[14].write(self.icc.clone());
+//         it[15].write(self.control.clone());
+// 
+//         for i in 16..64
+//         {
+//             it[i].write(Register::new(0));
+//         }
+// 
+//         return MaybeUninit::array_assume_init(it);*/
+//     }
+// }

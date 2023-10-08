@@ -9,14 +9,30 @@ use interrupt_enable::*;
 mod command;
 use command::*;
 
-use crate::{drivers::{
-    Register,
-    ahci::fis::{
-        ReceivedFis,
-        CommandHeader,
-        CommandListStructure
+use crate::{
+    arch::x86_64::{
+        kernel::busy_sleep,
+        mm::{
+            paging::{
+                map,
+                PageTableEntryFlags,
+                BasePageSize
+            },
+            physicalmem,
+            virtualmem
+        }
+    },
+    drivers::{
+        Register,
+        ahci::fis::{
+            ReceivedFis,
+            CommandHeader,
+            CommandListStructure
+        }
     }
-}, arch::x86_64::kernel::busy_sleep};
+};
+
+use super::fis::CommandTable2;
 
 pub struct Port
 {
@@ -111,16 +127,6 @@ impl Port
 
     pub fn init(port: &mut PortRegister, is_64bit_aware: bool, num_command_slots: u8, port_idx: u8)
     {
-        use crate::arch::x86_64::mm::{
-            paging::{
-                map,
-                PageTableEntryFlags,
-                BasePageSize
-            },
-            physicalmem,
-            virtualmem
-        };
-
         assert!(port_idx < 32);
 
         // println!("  - Stopping");
@@ -192,10 +198,8 @@ impl Port
         // println!("FB:  {:#x} => {:#x} ({:#x})", fb, new_fb, ((port.fbu.get() as u64) << 32) | (port.fb.get() as u64));
     }
 
-    pub fn setup_interrupts(port: &mut PortRegister, port_idx: u8)
+    pub fn setup_interrupts(port: &mut PortRegister)
     {
-        assert!(port_idx < 32);
-
         // Errors, some will always panic, some are pending a handler.
         port.ie.set_hbfs(true);
         port.ie.set_hdbs(true);
@@ -211,8 +215,9 @@ impl Port
         port.ie.set_dhrs(true);
     }
 
-    pub fn first_start(port: &mut PortRegister)
+    pub fn first_start(port: &mut PortRegister, is_64bit_aware: bool, count_cmd_slots: u8)
     {
+        println!("FIRST START");
         port.cmd.set_st(true);
         let sig = port.sig.get();
         let sta = port.ssts.get() & 0xf;
@@ -226,12 +231,80 @@ impl Port
             _ => { println!("{:#x} UNKNOWN", sig); return; },
         }
 
-        // OSDevWiki
+        // OSDevWiki, this FIS send to the device
         let mut fis = super::fis::RegH2D::default();
         fis.command.set(0xEC); // ATA_CMD_IDENTIFY
         fis.pmport_cc.set(1); // pmport 0, c 1
 
         // TODO
+        println!("CMDSLOT!");
+        let cmdslot = Self::find_free_cmd_slot(port, count_cmd_slots).expect("At least one command slot should be free.");
+
+        // CLBU has the PHYSICAL ADDRESS, i need the VIRTUAL ADDRESS
+        let command_list = unsafe { &mut *((((port.clbu.get() as u64) << 32) | (port.clb.get() as u64)) as *mut CommandListStructure) };
+        let slot = &mut command_list[cmdslot as usize];
+        slot.reset();
+        slot.set_cfl(5);
+        slot.set_clear_busy(true);
+        // slot.set_write(false); // after zeroing out (= false), this is redundant
+
+        // This is overkill, but I shot myself in the leg time wise.
+        println!("ALLOCATE!");
+        let phys = physicalmem::allocate(4096);
+        let virt = virtualmem::allocate(4096);
+        map::<BasePageSize>(
+            virt,
+            phys,
+            1,
+            PageTableEntryFlags::WRITABLE | PageTableEntryFlags::EXECUTE_DISABLE | PageTableEntryFlags::WRITE_THROUGH | PageTableEntryFlags::CACHE_DISABLE | PageTableEntryFlags::WRITABLE);
+
+        // CTBA must be a multiple of 128
+        if phys > 0xff_ff_ff_ff && !is_64bit_aware
+        {
+            panic!("Physical address is 64 bit, but hardware does not support 64 bit");
+        }
+
+        println!("SETUP");
+        // init the command table (copy our fis into it)
+        // Metadata (second argument of from_raw_parts_mut) is the entries count of CommandTable2.PRDT (the slice at the end).
+        let cmd_table = core::ptr::from_raw_parts_mut::<CommandTable2>(virt as *mut (), 0);
+        unsafe {
+            // PRDT is 0 length, therefore CommandTable2s size is 0x80
+            // Zero out the memory (valid bit pattern)
+            core::ptr::write_bytes(cmd_table as *mut u8, 0u8, 0x80);
+
+            // Init the set cfis data. All bytes, which are not of the fis (this fis is not 64 bytes long) are already set to 0.
+            let cfis = core::ptr::addr_of_mut!((*cmd_table).cfis);
+            core::ptr::copy_nonoverlapping(&fis as *const _ as *const u8, cfis as *mut u8, core::mem::size_of::<super::fis::RegH2D>());
+        }
+
+        println!("ADDRESS!");
+        slot.set_ctba(phys as u32);
+        if phys > 0xff_ff_ff_ff
+        {
+            unsafe { slot.set_ctbau((phys >> 32) as u32) };
+        }
+        else if is_64bit_aware
+        {
+            unsafe { slot.set_ctbau(0) };
+        }
+        println!("SEND!");
+        port.ci.set(1u32 << cmdslot);
+    }
+
+    fn find_free_cmd_slot(port: &PortRegister, count_cmd_slots: u8) -> Option<u8>
+    {
+        // SACT contains only Device Status (DS). The corresponding bit is set, before the bit is set in PxCI.
+        let slots = port.sact.get() | port.ci.get();
+        for i in 0..count_cmd_slots
+        {
+            // found slot
+            if slots & (1u32 << i) == 0
+            {
+                return Some(i);
+            }
+        }
+        None
     }
 }
 

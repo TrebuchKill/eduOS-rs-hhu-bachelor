@@ -115,11 +115,11 @@ pub struct CommandTable
     /// Command FIS (2 to 16 u32 in Length, must be a multiple of u32)
     /// 
     /// From 4.2.3.1: For Data Transfer Operations, this is the H2D Register FIS format as specified in the Serial ATA Revision 2.6 specification.
-    cfis: [Register<u8>; 64],
+    pub cfis: [Register<u8>; 64],
     /// ATAPI Command (12 or 16 Bytes)
-    acmd: [Register<u8>; 16],
+    pub acmd: [Register<u8>; 16],
     reserved: [Register<u8>; 0x30],
-    prdt: [Register<PRDT>; 0xff_ff] // 65535 (ffffh) is the maximum count
+    pub prdt: [Register<PRDT>; 0xff_ff] // 65535 (ffffh) is the maximum count
 }
 
 /// Difference to CommandTable2: the last field (prdt) is defined as [Type], not as [Type; N] (Slice v Array?)
@@ -128,9 +128,9 @@ pub struct CommandTable2
     /// Command FIS (2 to 16 u32 in Length, must be a multiple of u32)
     /// 
     /// From 4.2.3.1: For Data Transfer Operations, this is the H2D Register FIS format as specified in the Serial ATA Revision 2.6 specification.
-    cfis: [Register<u8>; 64],
+    pub cfis: [Register<u8>; 64],
     /// ATAPI Command (12 or 16 Bytes)
-    acmd: [Register<u8>; 16],
-    reserved: [Register<u8>; 0x30],
-    prdt: [Register<PRDT>] // 65535 (ffffh) is the maximum count
+    pub acmd: [Register<u8>; 16],
+    pub reserved: [Register<u8>; 0x30],
+    pub prdt: [Register<PRDT>] // 65535 (ffffh) is the maximum count
 }

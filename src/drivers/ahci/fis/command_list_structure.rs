@@ -25,6 +25,15 @@ impl CommandHeader
         }
     }
 
+    /// Sets all fields to 0
+    pub fn reset(&mut self)
+    {
+        for it in &mut self.data
+        {
+            it.set(0);
+        }
+    }
+
     /// Physical region descriptor table length in entries
     pub fn get_prdtl(&self) -> u16
     {

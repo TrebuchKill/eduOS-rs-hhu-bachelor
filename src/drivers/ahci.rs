@@ -289,9 +289,9 @@ impl AhciDevice
                 // println!("- HBA Clear");
                 mem.ghc.is.clear(i);
                 // println!("- Interrupts");
-                ports::Port::setup_interrupts(port, i);
+                ports::Port::setup_interrupts(port);
                 // println!("- Start");
-                ports::Port::first_start(port);
+                ports::Port::first_start(port, mem.ghc.cap.get_s64a(), mem.ghc.cap.get_ncs_adjusted());
                 // println!("Done");
 
                 /*let port = &mut mem.ports[i as usize];
