@@ -21,7 +21,7 @@ pub struct Data
     // I opted for the redox way, as it makes initializing the data easier
 
     /// Payload
-    pub data: [Register<u8>; 262]
+    pub data: [Register<u8>; 252]
 }
 
 impl Data
@@ -34,7 +34,7 @@ impl Data
             fis_type: Register::new(Type::DATA),
             pmport: Register::new(0),
             reserved: Register::new([0; 2]),
-            data: [DEFAULT_DATA_VALUE; 262]
+            data: [DEFAULT_DATA_VALUE; 252]
             // Alternative with inline const
             // See https://github.com/rust-lang/rfcs/pull/2920 https://github.com/rust-lang/rust/issues/76001
             // Currently unstable and behind a feature flag
