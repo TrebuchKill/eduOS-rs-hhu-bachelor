@@ -71,7 +71,8 @@ pub use command_table::*;
 #[repr(C)]
 pub struct ReceivedFis
 {
-    pub dsfis: DmaSetup, // As I don't use packed, this is automatically padded to size 0x20, I do not need to insert the padding field like osdev wiki
+    pub dsfis: DmaSetup, // As I don't use #[repr(C, packed)], this is automatically padded to size 0x20, I do not need to insert the padding field like osdev wiki
+    _dsfis_pad: Register<[u8; 4]>,
     pub psfis: PioSetup,
     _psfis_pad: Register<[u8; 12]>,
     pub rfis: RegD2H,
@@ -89,6 +90,7 @@ impl ReceivedFis
         Self {
 
             dsfis: DmaSetup::default(),
+            _dsfis_pad: Register::new([0u8; 4]),
             psfis: PioSetup::default(),
             _psfis_pad: Register::new([0u8; 12]),
             rfis: RegD2H::default(),

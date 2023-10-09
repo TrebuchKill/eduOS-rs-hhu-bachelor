@@ -41,6 +41,8 @@ pub fn inc_ticks() -> u64
 
 pub fn busy_sleep(ms: u64)
 {
+	// While looking at redoxOS-rs read write code, I noticed a busy loop which called a pause function, which on x86(_64) uses _mm_pause
+	// May be worth trying out
 	let wait_until = get_ticks().checked_add(ms).expect("The OS does not currently support running (and by extension waiting) for this long.");
 	loop
 	{
