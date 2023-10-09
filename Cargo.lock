@@ -40,7 +40,6 @@ dependencies = [
  "bootloader",
  "goblin",
  "num-traits",
- "paste",
  "qemu-exit",
  "simple-chunk-allocator",
  "spin",
@@ -91,12 +90,6 @@ checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
 ]
-
-[[package]]
-name = "paste"
-version = "1.0.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
 name = "plain"
