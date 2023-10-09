@@ -347,9 +347,15 @@ extern "x86-interrupt" fn timer_handler(stack_frame: ExceptionStackFrame) {
 
 extern "x86-interrupt" fn ahci_handler(stack_frame: ExceptionStackFrame)
 {
+	let it = irq_nested_disable();
 	send_eoi_to_slave();
 	send_eoi_to_master();
 	println!("Got interrupt from AHCI device (I hope)");
+	crate::drivers::ahci::dump_bad_idea();
+	loop {
+		unsafe { x86::halt() };
+	}
+	irq_nested_enable(it);
 }
 
 /// An interrupt gate descriptor.

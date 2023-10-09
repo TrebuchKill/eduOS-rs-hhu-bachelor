@@ -101,3 +101,10 @@ impl ReceivedFis
         }
     }
 }
+
+pub trait Fis
+{
+    // Why don't I make it a constant, instead of a function?
+    fn get_type(&self) -> Type;
+    fn copy_into(&self, dst: &mut [Register<u8>; 64]);
+}

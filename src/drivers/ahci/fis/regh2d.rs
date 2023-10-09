@@ -5,7 +5,7 @@ use super::Type;
 
 // May I regret not adding packed (here or anywhere else)? On x86 I doubt that, as sizes and alignment of types fit perfectly, but on other platforms?
 
-// FLAW: this things will be copied into memory, therefor they don't need this Register<u8> thing.
+// FLAW: this things will be copied into memory, therefore they don't need this Register<u8> thing.
 #[repr(C)]
 pub struct RegH2D
 {
@@ -13,6 +13,11 @@ pub struct RegH2D
     pub fis_type: Register<Type>,
 
     /// pmport 7:4, reserved 3:1, 0: (1 = Command) (0 = Control)
+    /// 
+    /// WARNING: This comment (and the other fis comments for this port) may be wrong.
+    /// 
+    /// Command/Control may be bit 7, pmport 3:0 (rest reserved)
+    // but thanks to redox-os for bringing light for this possible error now I HAVE AN INTERRUPT REQUEST!
     pub pmport_cc: Register<u8>,
 
     /// Command Register
@@ -96,6 +101,29 @@ impl Default for RegH2D
     fn default() -> Self
     {
         Self::default()
+    }
+}
+
+impl super::Fis for RegH2D
+{
+    fn get_type(&self) -> Type
+    {
+        self.fis_type.get()
+    }
+
+    fn copy_into(&self, dst: &mut [Register<u8>; 64])
+    {
+        unsafe {
+
+            let src_ptr = self as *const _ as *const u8;
+            let dst_ptr = dst as *mut _ as *mut u8;
+            
+            // Zero out all 64 bytes
+            core::ptr::write_bytes(dst_ptr, 0, 64);
+            
+            // Copy FIS into dst
+            core::ptr::copy_nonoverlapping(src_ptr, dst_ptr, core::mem::size_of::<Self>());
+        }
     }
 }
 

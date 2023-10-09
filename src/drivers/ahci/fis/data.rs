@@ -50,3 +50,17 @@ impl Default for Data
         Self::default()
     }
 }
+
+// This implementation seems premature
+impl super::Fis for Data
+{
+    fn get_type(&self) -> Type
+    {
+        self.fis_type.get()
+    }
+
+    fn copy_into(&self, _dst: &mut [Register<u8>; 64])
+    {
+        todo!("CFIS is 64 bytes long, but in redox os this is up to 256 bytes long.");
+    }
+}

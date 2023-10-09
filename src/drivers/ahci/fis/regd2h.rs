@@ -91,3 +91,16 @@ impl Default for RegD2H
         Self::default()
     }
 }
+
+impl super::Fis for RegD2H
+{
+    fn get_type(&self) -> Type
+    {
+        self.fis_type.get()
+    }
+
+    fn copy_into(&self, _dst: &mut [Register<u8>; 64])
+    {
+        unimplemented!("Send from device only")
+    }
+}

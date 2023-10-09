@@ -79,3 +79,16 @@ impl Default for PioSetup
         Self::default()
     }
 }
+
+impl super::Fis for PioSetup
+{
+    fn get_type(&self) -> Type
+    {
+        self.fis_type.get()
+    }
+
+    fn copy_into(&self, _dst: &mut [Register<u8>; 64])
+    {
+        unimplemented!("Send from device only")
+    }
+}

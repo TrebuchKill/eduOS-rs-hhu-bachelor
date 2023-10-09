@@ -29,6 +29,20 @@ impl PhysicalRegionDescriptorTable
         }
     }
 
+    pub fn new(dba: u64, interrupt_on_completion: bool, data_byte_count: u32) -> Self
+    {
+        assert_eq!(data_byte_count & 0x00_3f_ff_ff, data_byte_count);
+        Self {
+
+            dba: Register::new(dba as u32),
+            dbau: Register::new(((dba & 0xff_ff_ff_ff_00_00_00_00u64) >> 32) as u32),
+            _reserved: Register::new(0),
+            i_dbc: Register::new(
+                if interrupt_on_completion { 1u32 << 31 } else { 0 } | data_byte_count | 1
+            )
+        }
+    }
+
     pub fn get_dba(&self) -> u32
     {
         self.dba.get()
@@ -133,4 +147,27 @@ pub struct CommandTable2
     pub acmd: [Register<u8>; 16],
     pub reserved: [Register<u8>; 0x30],
     pub prdt: [Register<PRDT>] // 65535 (ffffh) is the maximum count
+}
+
+impl CommandTable2
+{
+    pub fn zeroed(&mut self)
+    {
+        for it in &mut self.cfis
+        {
+            it.set(0);
+        }
+        for it in &mut self.acmd
+        {
+            it.set(0);
+        }
+        for it in &mut self.reserved
+        {
+            it.set(0);
+        }
+        for it in &mut self.prdt
+        {
+            it.set(PhysicalRegionDescriptorTable::default());
+        }
+    }
 }

@@ -75,16 +75,13 @@ impl DmaSetup
         ((hi as u64) << 32) | (low as u64)
     }
 
-    /// OSDev Wiki Quote: "DMA Buffer Identifier. Used to Identify DMA buffer in host memory.
-    /// 
-    /// SATA Spec says host specific and not in Spec. Trying AHCI spec might work."
-    pub fn set_dma_buffer(&mut self, value: u64)
+    /*pub fn set_dma_buffer(&mut self, value: u64)
     {
         let value_low = value as u32;
         let value_hi = ((value & 0xff_ff_ff_ff_00_00_00_00u64) >> 32) as u32;
         self.dma_buffer_id_low.set(value_low);
         self.dma_buffer_id_high.set(value_hi);
-    }
+    }*/
 }
 
 impl Default for DmaSetup
@@ -92,5 +89,18 @@ impl Default for DmaSetup
     fn default() -> Self
     {
         Self::default()
+    }
+}
+
+impl super::Fis for DmaSetup
+{
+    fn get_type(&self) -> Type
+    {
+        self.fis_type.get()
+    }
+
+    fn copy_into(&self, _dst: &mut [Register<u8>; 64])
+    {
+        unimplemented!("Send from device only")
     }
 }

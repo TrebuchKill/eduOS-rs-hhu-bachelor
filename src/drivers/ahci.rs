@@ -72,7 +72,9 @@ pub struct AhciDevice
     device: PciGeneric,
     // abar: Option<&'a [u8]>
     abar_vaddr: usize,
-    abar_actual_size: usize
+    abar_actual_size: usize,
+    command_list_vaddr: [usize; 32],
+    fis_vaddr: [usize; 32],
 }
 
 impl AhciDevice
@@ -88,7 +90,9 @@ impl AhciDevice
             let mut ret = AhciDevice {
                 device,
                 abar_vaddr: 0,
-                abar_actual_size: 0
+                abar_actual_size: 0,
+                command_list_vaddr: [0; 32],
+                fis_vaddr: [0; 32]
             };
             ret.init();
             Some(ret)
@@ -265,34 +269,45 @@ impl AhciDevice
 
     fn init_ports(&mut self)
     {
-        use crate::arch::x86_64::mm::{
-            paging::map,
-            physicalmem,
-            virtualmem
-        };
-        let mem = self.get_hba_mem_mut().expect("Failed to load address");
-        // let number_of_command_slots = mem.ghc.cap.get_ncs_adjusted();
-        // let number_of_ports = mem.ghc.cap.get_np_adjusted();
+        // use crate::arch::x86_64::mm::{
+        //     paging::map,
+        //     physicalmem,
+        //     virtualmem
+        // };
 
-        // let spin_up = mem.ghc.cap.get_sss();
-        // println!("NCS: {}, NP: {}", number_of_command_slots, number_of_ports);
+        let (number_of_command_slots, is_64bit_aware) = {
+
+            let mem = self.get_hba_mem_mut().expect("Failed to load address");
+            (mem.ghc.cap.get_ncs_adjusted(), mem.ghc.cap.get_s64a())
+        };
+
         for i in 0u8..32u8
         {
-            if mem.ghc.pi.get(i)
+            let is_port_implemented = {
+                
+                let mem = self.get_hba_mem_mut().expect("Failed to load address");
+                mem.ghc.pi.get(i)
+            };
+            if is_port_implemented
             {
                 // bail on atapi? port.cmd.get_atapi
                 println!("Handling port {}", i);
 
+                let (vclb, vfb) = {
+                    
+                    let mem = self.get_hba_mem_mut().expect("Failed to load address");
+                    let port = &mut mem.ports[i as usize];
+                    ports::Port::init(port, is_64bit_aware, number_of_command_slots)
+                };
+
+                self.fis_vaddr[i as usize] = vfb;
+                self.command_list_vaddr[i as usize] = vclb;
+
+                let mem = self.get_hba_mem_mut().expect("Failed to load address");
                 let port = &mut mem.ports[i as usize];
-                // println!("- Init");
-                let _ = ports::Port::init(port, mem.ghc.cap.get_s64a(), mem.ghc.cap.get_ncs_adjusted(), i);
-                // println!("- HBA Clear");
                 mem.ghc.is.clear(i);
-                // println!("- Interrupts");
                 ports::Port::setup_interrupts(port);
-                // println!("- Start");
-                ports::Port::first_start(port, mem.ghc.cap.get_s64a(), mem.ghc.cap.get_ncs_adjusted());
-                // println!("Done");
+                ports::Port::first_start(port, is_64bit_aware, number_of_command_slots, vclb, vfb);
 
                 /*let port = &mut mem.ports[i as usize];
 
@@ -360,25 +375,6 @@ impl AhciDevice
         self.enable_ahci_mode();
         self.init_ports();
         self.enable_interrupts();
-
-        /*let addr = MemSpaceBarValue::try_from(self.device.get_bar_5()).unwrap();
-        let size = self.device.get_bar_5_size();
-        // Like the macro in src/macros.rs
-        let size_page_aligned = (size + 0x0f_ff) & !0x0f_ffu32;
-        debug_assert_eq!(Ok(addr), self.device.get_bar_5().try_into());
-
-        #[cfg(debug_assertions)]
-        println!("({:08x}, {:08x}, {:08x})", addr.address(), size, size_page_aligned);
-
-        let vmem = virtualmem::allocate(size_page_aligned as usize);
-        map::<BasePageSize>(
-            vmem,
-            addr.address() as usize,
-            (size_page_aligned >> 12) as usize, // division by 0x10_00 is the same as right shift by 12, when the lowest 12 bits are 0, which they are, thanks to the alignment
-            PageTableEntryFlags::CACHE_DISABLE
-        );
-        self.abar_vaddr = vmem;
-        self.abar_actual_size = size as usize;*/
     }
 
     fn calc_ports_slice_size(&self) -> usize
@@ -575,3 +571,5 @@ pub fn on_each_device_mut<F>(mut fun: F)
         fun(dev);
     }
 }
+
+pub use ports::dump_bad_idea;
