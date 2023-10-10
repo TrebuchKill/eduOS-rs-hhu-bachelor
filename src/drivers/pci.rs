@@ -62,7 +62,7 @@ fn write<'a>(guard: SpinlockIrqSaveGuard<'a, ()>, bus: u8, device: u8, func: u8,
 }
 
 mod iotypes;
-use iotypes::DataType;
+// use iotypes::DataType;
 
 pub mod devices;
 
@@ -242,99 +242,99 @@ pub fn init()
 }
 
 pub fn on_each_device<F>(fun: F)
-    where F: Fn(devices::AnyDevice) -> ()
+    where F: Fn(usize, devices::AnyDevice) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
-        fun(*dev);
+        fun(i, *dev);
     }
 }
 
 pub fn on_each_generic_device<F>(fun: F)
-    where F: Fn(devices::Generic) -> ()
+    where F: Fn(usize, devices::Generic) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
         if let devices::AnyDevice::Generic(it) = dev
         {
-            fun(*it);
+            fun(i, *it);
         }
     }
 }
 
 pub fn on_each_card_bridge_device<F>(fun: F)
-    where F: Fn(devices::CardBridge) -> ()
+    where F: Fn(usize, devices::CardBridge) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
         if let devices::AnyDevice::CardBridge(it) = dev
         {
-            fun(*it);
+            fun(i, *it);
         }
     }
 }
 
 pub fn on_each_pci_bridge_device<F>(fun: F)
-    where F: Fn(devices::PciBridge) -> ()
+    where F: Fn(usize, devices::PciBridge) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
         if let devices::AnyDevice::PciBridge(it) = dev
         {
-            fun(*it);
+            fun(i, *it);
         }
     }
 }
 
 pub fn on_each_device_mut<F>(mut fun: F)
-    where F: FnMut(devices::AnyDevice) -> ()
+    where F: FnMut(usize, devices::AnyDevice) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
-        fun(*dev);
+        fun(i, *dev);
     }
 }
 
 pub fn on_each_generic_device_mut<F>(mut fun: F)
-    where F: FnMut(devices::Generic) -> ()
+    where F: FnMut(usize, devices::Generic) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
         if let devices::AnyDevice::Generic(it) = dev
         {
-            fun(*it);
+            fun(i, *it);
         }
     }
 }
 
 pub fn on_each_card_bridge_device_mut<F>(mut fun: F)
-    where F: FnMut(devices::CardBridge) -> ()
+    where F: FnMut(usize, devices::CardBridge) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
         if let devices::AnyDevice::CardBridge(it) = dev
         {
-            fun(*it);
+            fun(i, *it);
         }
     }
 }
 
 pub fn on_each_pci_bridge_device_mut<F>(mut fun: F)
-    where F: FnMut(devices::PciBridge) -> ()
+    where F: FnMut(usize, devices::PciBridge) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
         if let devices::AnyDevice::PciBridge(it) = dev
         {
-            fun(*it);
+            fun(i, *it);
         }
     }
 }

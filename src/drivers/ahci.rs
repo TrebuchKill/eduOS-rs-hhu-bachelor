@@ -31,7 +31,8 @@ use crate::{
             virtualmem
         },
         BasePageSize
-    }, synch::spinlock::Spinlock
+    },
+    synch::spinlock::Spinlock
 };
 
 use core::convert::{
@@ -66,6 +67,8 @@ macro_rules! define_rwc
 
 // https://stackoverflow.com/a/31749071
 // pub use define_rwc;
+
+mod ahci2;
 
 pub struct AhciDevice
 {
@@ -176,7 +179,6 @@ impl AhciDevice
                     break;
                 }
             }
-            todo!("Wait 25ms and check BOHC.BB"); // If set, wait at least 2 seconds for the bios tasks to complete
         }
     }
 
@@ -527,7 +529,12 @@ pub struct HbaMemory
     pub ports: [PortRegister]
 }
 
-static DEVICES: Spinlock<alloc::vec::Vec<AhciDevice>> = Spinlock::new(alloc::vec::Vec::new());
+// static DEVICES: Spinlock<alloc::vec::Vec<AhciDevice>> = Spinlock::new(alloc::vec::Vec::new());
+
+use ahci2::{
+    AHCI_DEVICES as DEVICES,
+    AhciDevice2
+};
 
 pub fn init()
 {
@@ -536,40 +543,43 @@ pub fn init()
     {
         panic!("AHCI already initialized");
     }
-    super::pci::on_each_generic_device_mut(|dev| {
+    //super::pci::on_each_generic_device_mut(|pci_idx, dev| {
+    //
+    //    if let Some(dev) = AhciDevice::new(dev)
+    //    {
+    //        devices.push(dev);
+    //    }
+    //});
 
-        if let Some(dev) = AhciDevice::new(dev)
+    super::pci::on_each_generic_device_mut(|pci_idx, dev| {
+
+        if let Some(it) = AhciDevice2::new(pci_idx, &dev, devices.len())
         {
-            devices.push(dev);
+            devices.push(it);
         }
     });
-    /*if let Some(it) = unsafe { crate::arch::x86_64::kernel::BOOT_INFO }
-    {
-        for it in it.memory_map.iter()
-        {
-            println!("{:?} {:#x}..{:#x}", it.region_type, it.range.start_addr(), it.range.end_addr());
-        }
-    }*/
 }
 
 pub fn on_each_device<F>(fun: F)
-    where F: Fn(&AhciDevice) -> ()
+    where F: Fn(usize, &AhciDevice2) -> ()
 {
     let devs = DEVICES.lock();
-    for dev in &*devs
+    for (i, dev) in devs.iter().enumerate()
     {
-        fun(dev);
+        println!("CALL {}", i);
+        fun(i, dev);
     }
 }
 
+// I originally meant the mut to refert to FnMut (vs just Fn)
 pub fn on_each_device_mut<F>(mut fun: F)
-    where F: FnMut(&AhciDevice) -> ()
+    where F: FnMut(usize, &mut AhciDevice2) -> ()
 {
-    let devs = DEVICES.lock();
-    for dev in &*devs
+    let mut devs = DEVICES.lock();
+    for (i, dev) in devs.iter_mut().enumerate()
     {
-        fun(dev);
+        fun(i, dev);
     }
 }
 
-pub use ports::dump_bad_idea;
+pub use ahci2::on_interrupt;

@@ -60,6 +60,38 @@ static mut HEAP_BITMAP: PageAligned<[u8; CHUNK_AMOUNT / 8]> = heap_bitmap!(chunk
 static ALLOCATOR: GlobalChunkAllocator =
 	unsafe { GlobalChunkAllocator::new(HEAP.deref_mut_const(), HEAP_BITMAP.deref_mut_const()) };
 
+pub fn heap_investigation()
+{
+	use core::ops::Deref;
+	let boot_info = unsafe { crate::arch::x86_64::kernel::BOOT_INFO.unwrap() };
+	let tmp = unsafe { HEAP.deref() as *const _ as u64 };
+	let start = arch::x86_64::mm::paging::get_physical_address::<arch::x86_64::mm::paging::BasePageSize>(tmp as usize) as u64;
+	let end = start + (HEAP_SIZE as u64);
+	let mut start_idx = 0usize;
+	let mut end_idx = 0usize;
+	for (i, it) in boot_info.memory_map.iter().enumerate()
+	{
+		if it.range.start_addr() <= start && start < it.range.end_addr()
+		{
+			start_idx = i;
+			// println!("HEAP starts in {:?} {:x}..{:x}", it.region_type, it.range.start_addr(), it.range.end_addr());
+		}
+		if it.range.start_addr() < end && end <= it.range.end_addr()
+		{
+			end_idx = i;
+			// println!("HEAP ends in {:?} {:x}..{:x}", it.region_type, it.range.start_addr(), it.range.end_addr());
+		}
+	}
+	println!("Heap resides in these ranges:");
+	for (i, it) in boot_info.memory_map.iter().enumerate()
+	{
+		if start_idx <= i && i <= end_idx
+		{
+			println!("- {:?} {:x}..{:x}", it.region_type, it.range.start_addr(), it.range.end_addr());
+		}
+	}
+}
+
 pub extern "C" fn test_c()
 {
 	test()
@@ -76,10 +108,10 @@ pub fn test()
 	let mut bridge_count = 0;
 	let mut ahci_count = 0;
 
-	drivers::pci::on_each_device_mut(|_| pci_count += 1);
-	drivers::pci::on_each_generic_device_mut(|_| generic_count += 1);
-	drivers::pci::on_each_pci_bridge_device_mut(|_| bridge_count += 1);
-	drivers::pci::on_each_card_bridge_device_mut(|_| card_count += 1);
+	drivers::pci::on_each_device_mut(|_, _| pci_count += 1);
+	drivers::pci::on_each_generic_device_mut(|_, _| generic_count += 1);
+	drivers::pci::on_each_pci_bridge_device_mut(|_, _| bridge_count += 1);
+	drivers::pci::on_each_card_bridge_device_mut(|_, _| card_count += 1);
 
 	/*drivers::pci::on_each_generic_device(|it|
 	{
@@ -89,10 +121,40 @@ pub fn test()
 		}
 	});*/
 
-	drivers::ahci::on_each_device_mut(|_| ahci_count += 1);
-	// drivers::ahci::on_each_device(|it| it.debug_print());
+	drivers::ahci::on_each_device_mut(|_, _| ahci_count += 1);
+	drivers::ahci::on_each_device(|i, it| {
 
-	println!("({}, {}, {}, {}, {})", pci_count, generic_count, card_count, bridge_count, ahci_count);
+		println!("HBA {}", i);
+		println!(
+			"- BOH {}, NCS {}, NP  {}",
+			it.abar_ptr.ghc.cap2.get_boh(),
+			it.abar_ptr.ghc.cap.get_ncs_adjusted(),
+			it.abar_ptr.ghc.cap.get_np_adjusted());
+		println!("- IS {:032b}, PI  {:032b}", it.abar_ptr.ghc.is, it.abar_ptr.ghc.pi);
+		for (j, port) in it.ports.iter().enumerate()
+		{
+			if let Some(port) = port
+			{
+				println!("- Port {}", j);
+				println!(
+					"  - {}, {}, CR {}, FR {}",
+					port.hba_idx == i,
+					port.hba_port_idx == j,
+					it.abar_ptr.ports[port.hba_port_idx].cmd.get_cr(),
+					it.abar_ptr.ports[port.hba_port_idx].cmd.get_fr());
+				println!("  - CI  {}, CCS {}", it.abar_ptr.ports[port.hba_port_idx].ci.get(), it.abar_ptr.ports[port.hba_port_idx].cmd.get_ccs());
+				println!(
+					"  - STS {:x}, SSTS {:03x}, SIG {:08x}, SERR {:08x}",
+					it.abar_ptr.ports[port.hba_port_idx].tfd.get() & 0xf,
+					it.abar_ptr.ports[port.hba_port_idx].ssts.get(),
+					it.abar_ptr.ports[port.hba_port_idx].sig.get(),
+					it.abar_ptr.ports[port.hba_port_idx].serr.get());
+				
+			}
+		}
+	});
+
+	println!("TEST ({}, {}, {}, {}, {})", pci_count, generic_count, card_count, bridge_count, ahci_count);
 
 	/*let devices = pci::scan_bus();
 	println!("Found {} PCI Device(s)", devices.len());

@@ -72,6 +72,7 @@ pub extern "C" fn main() -> ! {
 	println!("Shutdown system!");
 
 	// Keep the QEMU window alive
+	// TODO: Remove
 	loop {
 		unsafe { x86::halt() };
 	}
