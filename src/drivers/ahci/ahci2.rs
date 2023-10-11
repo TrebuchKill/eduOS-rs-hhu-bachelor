@@ -8,7 +8,11 @@ use super::{
         CommandListStructure,
         ReceivedFis,
         CommandHeader,
-        CommandTable2
+        CommandTable2,
+        CommandTable2Ptr,
+        RegH2D,
+        Fis,
+        PhysicalRegionDescriptorTable
     },
     is_ahci_device
 };
@@ -36,7 +40,10 @@ use crate::{
     }
 };
 use alloc::vec::Vec;
-use core::convert::TryFrom;
+use core::convert::{
+    TryFrom,
+    TryInto
+};
 
 // TODO: Replace with crate::LOGGER
 static LOGGER: KernelLogger = KernelLogger{ log_level: LogLevel::DEBUG };
@@ -71,8 +78,10 @@ impl AhciDevice2
         {
             if it.ahci_init(hba_idx)
             {
+                println!("After AHCI init");
                 return output;
             }
+            println!("After AHCI init");
         }
         None
     }
@@ -150,9 +159,11 @@ impl AhciDevice2
 
         // Enable Ports
         self.init_ports(hba_idx);
+        debug!("Back in AHCI_INIT");
 
         // Enable Interrupts
         self.abar_ptr.ghc.ghc.set_ie(true);
+        debug!("Interrupt ENABLED");
 
         true
     }
@@ -222,16 +233,36 @@ impl AhciDevice2
 
         for i in 0..32u8
         {
-            if self.abar_ptr.ghc.pi.get(i)
+            // SSTS part
+            // 0xf: Mask for Device Detection (DET)
+            // 3: Present and Comm Established
+            
+            if self.abar_ptr.ghc.pi.get(i) && self.abar_ptr.ports[i as usize].ssts.get() & 0xf == 3
             {
+                // println!("SSTS {:3x}, SIG {:x}", self.abar_ptr.ports[i as usize].ssts.get(), self.abar_ptr.ports[i as usize].sig.get());
                 self.ports[i as usize] = AhciPort2::new(
                     self,
                     hba_idx,
                     i,
                     command_slots_per_port,
                     is_64bit_aware);
+
+                
+                // println!("SSTS {:3x}, SIG {:x}", self.abar_ptr.ports[i as usize].ssts.get(), self.abar_ptr.ports[i as usize].sig.get());
+                match self.abar_ptr.ports[i as usize].sig.get()
+                {
+                    // 0x101 SATA
+                    // Refer to osdev wiki for other values, I don't support right now
+                    0x101 => if let Some(ref mut port) = self.ports[i as usize]
+                    {
+                        port.identify(self.abar_ptr);
+                        debug!("Back in init_ports");
+                    }
+                    it => println!("SIG {:x}", it)
+                }
             }
         }
+        debug!("After init_ports loop");
     }
 }
 
@@ -330,9 +361,13 @@ impl AhciPort2
         }
 
         {
-            // Setup command list (CLB) and Fis Receive Structure (FB)
             let port = &mut ahci.abar_ptr.ports[hba_port_idx];
             
+            // I didn't do it, but redox did: disable power management by
+            // Setting PxSCTL.IPM Bits 8..=11 to all 1
+            port.sctl.set(port.sctl.get() | 0x0f_00);
+
+            // Setup command list (CLB) and Fis Receive Structure (FB)
             let clb64 =
                 paging::get_physical_address::<BasePageSize>(clb as usize) as u64;
             if !is_64bit_aware && clb64 > 0xff_ff_ff_ff
@@ -354,7 +389,8 @@ impl AhciPort2
             port.cmd.set_fre(true);
 
             // Clear SATA Errors & Diagnostics
-            port.serr.set(0xff_ff_ff_ff);
+            // port.serr.set(0xff_ff_ff_ff);
+            port.serr.set(0x07_ff_0f_03);
 
             // Clear all pending interrupt notifications
             port.is.clear_all();
@@ -381,7 +417,7 @@ impl AhciPort2
             port.ie.set_dhrs(true);
 
             // Start the Port
-            port.cmd.set_st(true);
+            // port.cmd.set_st(true);
         }
 
         unsafe {
@@ -556,18 +592,117 @@ impl AhciPort2
 
 impl AhciPort2
 {
-    pub fn write(&mut self, buffer: &[u8])
+    pub fn write(&mut self, hba: &mut HbaMemory, buffer: &[u8])
     {
     }
 
-    pub fn read(&mut self, buffer: &mut [u8])
+    pub fn read(&mut self, hba: &mut HbaMemory, buffer: &mut [u8])
     {
+    }
+
+    pub fn identify(&mut self, hba: &mut HbaMemory)
+    {
+        let mut buffer = [0u16; 256];
+        let buffer_len: usize = core::mem::size_of_val(&buffer);
+        // I want bytes, not T (= u16)
+        // Should I either hardcode 512 or use core::mem::size_of::<[u16; 256]>()?
+
+        let mut fis = RegH2D::default();
+        fis.command.set(0xEC); // ATA_CMD_IDENTIFY
+        fis.pmport_cc.set(0x80);
+        fis.countl.set(1);
+
+        let is_ready = unsafe { self.handle_fis(hba, &mut buffer as *mut _ as u64, buffer_len as u64, &fis) };
+        if is_ready
+        {
+            Self::start_impl(&mut hba.ports[self.hba_port_idx]);
+        }
+    }
+
+    /// Unsafe Note: buffer must be writable, if data from the device is read.
+    /// The buffer_len must be the size of the buffer.
+    /// The buffer size must be divisible by 2, the buffer aligned by 2.
+    unsafe fn handle_fis(&mut self, hba: &mut HbaMemory, buffer: u64, buffer_len: u64, fis: &RegH2D) -> bool
+    {
+        assert_eq!(buffer & 1, 0, "buffer must be 2 byte aligned.");
+        assert_eq!(buffer_len & 1, 0, "buffer_len must be a multiple of 2");
+        assert_eq!(buffer_len & 0x00_3f_ff_ff, buffer_len, "buffer_len is restricted to the first 22 bits");
+
+        let port = &mut hba.ports[self.hba_port_idx];
+        let slot_num = match Self::find_empty_slot(port, self.cmd_slot_count as usize)
+        {
+            None => return false,
+            Some(it) => it,
+        };
+
+        debug!("Using slot {}", slot_num);
+        let cmd_header = &mut self.clb[slot_num as usize];
+        cmd_header.reset();
+        cmd_header.set_prdtl(1);
+        cmd_header.set_cfl(
+            (core::mem::size_of::<RegH2D>() / core::mem::size_of::<u32>()) as u8);
+
+        let mut cmd_table = CommandTable2Ptr::new(1);
+        {
+            let cmd_tbl = cmd_table.as_mut();
+            fis.copy_into(&mut cmd_tbl.cfis);
+            cmd_tbl.prdt[0].set(
+                PhysicalRegionDescriptorTable::new(
+                    buffer,
+                    false,
+                    (buffer_len - 1) as u32)) // Test: redox-os effectively adds 1 (in the fis code), i subtract one.
+        }
+
+        let address = paging::get_physical_address::<BasePageSize>(cmd_table.as_usize()) as u64;
+        let addr_lo = address as u32;
+        let addr_hi = (address >> 32) as u32;
+        cmd_header.set_ctba(addr_lo);
+        if hba.ghc.cap.get_s64a()
+        {
+            cmd_header.set_ctbau(addr_hi);
+        }
+        else
+        {
+            assert_eq!(addr_hi, 0, "Hardware does not 64 bit, while we have a 64 bit address");
+        }
+
+        port.ci.set(1u32 << slot_num);
+
+        // ATA_DEV_BUSY (0x80) | ATA_DEV_DRQ (0x08)
+        while port.tfd.get() & 0x88 != 0
+        {
+            debug!("Waiting");
+            core::hint::spin_loop();
+        }
+
+        true
+    }
+
+    fn find_empty_slot(this: &PortRegister, cmd_slot_count: usize) -> Option<u8>
+    {
+        // Remember: the hba has a value in 0..=31, I use a value in 1..=32
+        debug_assert!(cmd_slot_count <= 32);
+        // let slots = self.cmd_slot_count;
+        let options = this.ci.get() | this.sact.get();
+        for i in 0..cmd_slot_count
+        {
+            if options & (1u32 << i) == 0
+            {
+                return Some(i as u8);
+            }
+        }
+        None
     }
 }
 
 #[doc(hidden)]
 pub fn on_interrupt(_num: u8)
 {
+    // Big Problem: My Entry Point AHCI_DEVICES may be locked.
+    // When this happens, this function will deadlock.
+    // IT TOOK ME A FOXING DAY TO FIGURE THIS ONE OUT.
+    // I'm so stupid.
+    
     super::on_each_device(|i, it| {
 
 		println!("INTERRUPT HBA {}", i);
@@ -598,8 +733,59 @@ pub fn on_interrupt(_num: u8)
 				
 			}
 		}
+        loop {
+
+            unsafe { x86::halt() };
+        }
 	});
 }
 
-pub(super) static AHCI_DEVICES: Spinlock<Vec<AhciDevice2>> = Spinlock::new(Vec::new());
+static AHCI_DEVICES: Spinlock<Vec<AhciDevice2>> = Spinlock::new(Vec::new());
+
+pub fn with_ahci_devices<F>(mut func: F)
+    where F: FnMut(&Vec<AhciDevice2>)
+{
+    const PIC2_DATA: u16 = 0xa1;
+
+    // Mask IRQ 9 - 11
+    const MASK: u8 = 8 | 4 | 2;
+    let old_data = unsafe {
+        let it = x86::io::inb(PIC2_DATA);
+        x86::io::outb(PIC2_DATA, it | MASK);
+        it
+    };
+
+    // Why not IrqSafeSpinlock? Because I need at least PIT
+    let lock = AHCI_DEVICES.lock();
+    func(lock.as_ref());
+
+    unsafe {
+
+        x86::io::outb(PIC2_DATA, old_data);
+    }
+}
+
+pub fn with_ahci_devices_mut<F>(mut func: F)
+    where F: FnMut(&mut Vec<AhciDevice2>)
+{
+    const PIC2_DATA: u16 = 0xa1;
+
+    // Mask IRQ 9 - 11
+    const MASK: u8 = 8 | 4 | 2;
+    let old_data = unsafe {
+        let it = x86::io::inb(PIC2_DATA);
+        x86::io::outb(PIC2_DATA, it | MASK);
+        it
+    };
+
+    // Why not IrqSafeSpinlock? Because I need at least PIT
+    let mut lock = AHCI_DEVICES.lock();
+    func(lock.as_mut());
+
+    unsafe {
+
+        x86::io::outb(PIC2_DATA, old_data);
+    }
+}
+
 // pub(super) static PORTS: Spinlock<Vec<AhciPort2>> = Spinlock::new(Vec::new());

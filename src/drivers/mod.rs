@@ -15,6 +15,7 @@ pub fn init()
     //     unsafe { x86::halt() };
     // }
     // crate::arch::x86_64::mm::physicalmem::debug_print();
+    println!("After AHCI");
 }
 
 pub fn on_interrupt(num: u8)

@@ -532,13 +532,30 @@ pub struct HbaMemory
 // static DEVICES: Spinlock<alloc::vec::Vec<AhciDevice>> = Spinlock::new(alloc::vec::Vec::new());
 
 use ahci2::{
-    AHCI_DEVICES as DEVICES,
+    // AHCI_DEVICES as DEVICES,
+    with_ahci_devices,
+    with_ahci_devices_mut,
     AhciDevice2
 };
 
 pub fn init()
 {
-    let mut devices = DEVICES.lock();
+    with_ahci_devices_mut(|devices|{
+
+        if !devices.is_empty()
+        {
+            panic!("AHCI already initialized");
+        }
+        super::pci::on_each_generic_device_mut(|pci_idx, dev| {
+
+            if let Some(it) = AhciDevice2::new(pci_idx, &dev, devices.len())
+            {
+                devices.push(it);
+            }
+            println!("After AhciInit");
+        });
+    });
+    /*let mut devices = DEVICES.lock();
     if !devices.is_empty()
     {
         panic!("AHCI already initialized");
@@ -557,29 +574,37 @@ pub fn init()
         {
             devices.push(it);
         }
-    });
+        println!("After AhciInit");
+    });*/
 }
 
 pub fn on_each_device<F>(fun: F)
     where F: Fn(usize, &AhciDevice2) -> ()
 {
-    let devs = DEVICES.lock();
-    for (i, dev) in devs.iter().enumerate()
-    {
-        println!("CALL {}", i);
-        fun(i, dev);
-    }
+    // let devs = DEVICES.lock();
+    with_ahci_devices(|devs| {
+        
+        for (i, dev) in devs.iter().enumerate()
+        {
+            println!("CALL {}", i);
+            fun(i, dev);
+        }
+    });
 }
 
 // I originally meant the mut to refert to FnMut (vs just Fn)
 pub fn on_each_device_mut<F>(mut fun: F)
     where F: FnMut(usize, &mut AhciDevice2) -> ()
 {
-    let mut devs = DEVICES.lock();
-    for (i, dev) in devs.iter_mut().enumerate()
-    {
-        fun(i, dev);
-    }
+    // let mut devs = DEVICES.lock();
+    with_ahci_devices_mut(|devs|{
+
+        for (i, dev) in devs.iter_mut().enumerate()
+        {
+            fun(i, dev);
+        }
+    });
+    
 }
 
 pub use ahci2::on_interrupt;

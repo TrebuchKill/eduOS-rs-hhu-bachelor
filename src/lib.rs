@@ -122,37 +122,37 @@ pub fn test()
 	});*/
 
 	drivers::ahci::on_each_device_mut(|_, _| ahci_count += 1);
-	drivers::ahci::on_each_device(|i, it| {
-
-		println!("HBA {}", i);
-		println!(
-			"- BOH {}, NCS {}, NP  {}",
-			it.abar_ptr.ghc.cap2.get_boh(),
-			it.abar_ptr.ghc.cap.get_ncs_adjusted(),
-			it.abar_ptr.ghc.cap.get_np_adjusted());
-		println!("- IS {:032b}, PI  {:032b}", it.abar_ptr.ghc.is, it.abar_ptr.ghc.pi);
-		for (j, port) in it.ports.iter().enumerate()
-		{
-			if let Some(port) = port
-			{
-				println!("- Port {}", j);
-				println!(
-					"  - {}, {}, CR {}, FR {}",
-					port.hba_idx == i,
-					port.hba_port_idx == j,
-					it.abar_ptr.ports[port.hba_port_idx].cmd.get_cr(),
-					it.abar_ptr.ports[port.hba_port_idx].cmd.get_fr());
-				println!("  - CI  {}, CCS {}", it.abar_ptr.ports[port.hba_port_idx].ci.get(), it.abar_ptr.ports[port.hba_port_idx].cmd.get_ccs());
-				println!(
-					"  - STS {:x}, SSTS {:03x}, SIG {:08x}, SERR {:08x}",
-					it.abar_ptr.ports[port.hba_port_idx].tfd.get() & 0xf,
-					it.abar_ptr.ports[port.hba_port_idx].ssts.get(),
-					it.abar_ptr.ports[port.hba_port_idx].sig.get(),
-					it.abar_ptr.ports[port.hba_port_idx].serr.get());
-				
-			}
-		}
-	});
+//	drivers::ahci::on_each_device(|i, it| {
+//
+//		println!("HBA {}", i);
+//		println!(
+//			"- BOH {}, NCS {}, NP  {}",
+//			it.abar_ptr.ghc.cap2.get_boh(),
+//			it.abar_ptr.ghc.cap.get_ncs_adjusted(),
+//			it.abar_ptr.ghc.cap.get_np_adjusted());
+//		println!("- IS {:032b}, PI  {:032b}", it.abar_ptr.ghc.is, it.abar_ptr.ghc.pi);
+//		for (j, port) in it.ports.iter().enumerate()
+//		{
+//			if let Some(port) = port
+//			{
+//				println!("- Port {}", j);
+//				println!(
+//					"  - {}, {}, CR {}, FR {}",
+//					port.hba_idx == i,
+//					port.hba_port_idx == j,
+//					it.abar_ptr.ports[port.hba_port_idx].cmd.get_cr(),
+//					it.abar_ptr.ports[port.hba_port_idx].cmd.get_fr());
+//				println!("  - CI  {}, CCS {}", it.abar_ptr.ports[port.hba_port_idx].ci.get(), it.abar_ptr.ports[port.hba_port_idx].cmd.get_ccs());
+//				println!(
+//					"  - STS {:x}, SSTS {:03x}, SIG {:08x}, SERR {:08x}",
+//					it.abar_ptr.ports[port.hba_port_idx].tfd.get() & 0xf,
+//					it.abar_ptr.ports[port.hba_port_idx].ssts.get(),
+//					it.abar_ptr.ports[port.hba_port_idx].sig.get(),
+//					it.abar_ptr.ports[port.hba_port_idx].serr.get());
+//				
+//			}
+//		}
+//	});
 
 	println!("TEST ({}, {}, {}, {}, {})", pci_count, generic_count, card_count, bridge_count, ahci_count);
 

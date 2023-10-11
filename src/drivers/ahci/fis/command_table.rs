@@ -29,6 +29,8 @@ impl PhysicalRegionDescriptorTable
         }
     }
 
+    /// data_byte_count must be 22 bits. The last bit is ignored, as the last bit has to be set.
+    /// For Example: The value 0 and 1 will have the same result: Writing 1 and being interpreted as 2.
     pub fn new(dba: u64, interrupt_on_completion: bool, data_byte_count: u32) -> Self
     {
         assert_eq!(data_byte_count & 0x00_3f_ff_ff, data_byte_count);
@@ -169,5 +171,91 @@ impl CommandTable2
         {
             it.set(PhysicalRegionDescriptorTable::default());
         }
+    }
+}
+
+// Allocate and 0 out CommandTable
+#[repr(transparent)]
+pub struct CommandTable2Ptr(*mut CommandTable2);
+
+impl CommandTable2Ptr
+{
+    pub fn new(num_prdt: u32) -> Self
+    {
+        use crate::arch::x86_64::mm::{
+            paging::{
+                self,
+                BasePageSize,
+                PageTableEntryFlags
+            },
+            physicalmem,
+            virtualmem
+        };
+
+        // Per spec 65535 entires are allowed. But I have to limit it, as I want to fit it in one Page
+        // One PRDT is 16 bytes. The base size (0 prdt) of CommandTable2 is 128. Padding in both included.
+        // (4096 - 128) / 16 = 248
+        // num_prdt can be at most 248 with my restriction, but in case I am off by one, I will check < 248.
+        // I rather waste space (allow less entries) than write into another page (being one entry above).
+        assert!(num_prdt > 0 && num_prdt < 248, "num_prdt must be between 0..<248");
+
+        // Allocate PRDT memory 
+        let pmem = physicalmem::allocate(4096);
+        let vmem = virtualmem::allocate(4096);
+        paging::map::<BasePageSize>(vmem, pmem, 1, PageTableEntryFlags::WRITABLE | PageTableEntryFlags::CACHE_DISABLE | PageTableEntryFlags::WRITE_THROUGH);
+
+        let prdt = core::ptr::from_raw_parts_mut(vmem as *mut (), num_prdt as usize);
+        unsafe { (prdt as *mut u8).write_bytes(0, (128 + (num_prdt * 16)) as usize) };
+
+        Self(prdt)
+    }
+
+    pub fn as_usize(&self) -> usize
+    {
+        self.0 as *const () as usize
+    }
+
+    pub fn as_u64(&self) -> u64
+    {
+        self.0 as *const () as u64
+    }
+
+    pub fn get_lo_u32(&self) -> u32
+    {
+        self.0 as *const () as u32
+    }
+
+    pub fn get_hi_u32(&self) -> u32
+    {
+        ((self.0 as *const () as u64) >> 32) as u32
+    }
+
+    pub fn as_ref(&self) -> &CommandTable2
+    {
+        unsafe { &*self.0 }
+    }
+
+    pub fn as_mut(&mut self) -> &mut CommandTable2
+    {
+        unsafe { &mut *self.0 }
+    }
+}
+
+impl Drop for CommandTable2Ptr
+{
+    fn drop(&mut self)
+    {
+        use crate::arch::x86_64::mm::{
+            paging::{
+                self,
+                BasePageSize,
+                PageTableEntryFlags
+            },
+            physicalmem,
+            virtualmem
+        };
+        let pmem = physicalmem::allocate(4096);
+        let vmem = virtualmem::allocate(4096);
+        paging::map::<BasePageSize>(vmem, pmem, 1, PageTableEntryFlags::WRITABLE | PageTableEntryFlags::CACHE_DISABLE | PageTableEntryFlags::WRITE_THROUGH);
     }
 }
