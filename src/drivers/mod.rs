@@ -11,11 +11,7 @@ pub fn init()
 {
     pci::init();
     ahci::init();
-    // loop {
-    //     unsafe { x86::halt() };
-    // }
-    // crate::arch::x86_64::mm::physicalmem::debug_print();
-    println!("After AHCI");
+    ahci::on_interrupt(0);
 }
 
 pub fn on_interrupt(num: u8)

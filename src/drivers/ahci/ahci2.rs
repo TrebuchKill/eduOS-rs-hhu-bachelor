@@ -78,10 +78,10 @@ impl AhciDevice2
         {
             if it.ahci_init(hba_idx)
             {
-                println!("After AHCI init");
+                // println!("After AHCI init");
                 return output;
             }
-            println!("After AHCI init");
+            // println!("After AHCI init");
         }
         None
     }
@@ -159,7 +159,6 @@ impl AhciDevice2
 
         // Enable Ports
         self.init_ports(hba_idx);
-        debug!("Back in AHCI_INIT");
 
         // Enable Interrupts
         self.abar_ptr.ghc.ghc.set_ie(true);
@@ -236,8 +235,12 @@ impl AhciDevice2
             // SSTS part
             // 0xf: Mask for Device Detection (DET)
             // 3: Present and Comm Established
+            // if self.abar_ptr.ghc.pi.get(i)
+            // {
+            //     println!("{:x}", self.abar_ptr.ports[i as usize].ssts.get() & 0xf);
+            // }
             
-            if self.abar_ptr.ghc.pi.get(i) && self.abar_ptr.ports[i as usize].ssts.get() & 0xf == 3
+            if self.abar_ptr.ghc.pi.get(i) // && self.abar_ptr.ports[i as usize].ssts.get() & 0xf == 3
             {
                 // println!("SSTS {:3x}, SIG {:x}", self.abar_ptr.ports[i as usize].ssts.get(), self.abar_ptr.ports[i as usize].sig.get());
                 self.ports[i as usize] = AhciPort2::new(
@@ -256,13 +259,11 @@ impl AhciDevice2
                     0x101 => if let Some(ref mut port) = self.ports[i as usize]
                     {
                         port.identify(self.abar_ptr);
-                        debug!("Back in init_ports");
                     }
-                    it => println!("SIG {:x}", it)
+                    it => debug!("SIG {:x}", it)
                 }
             }
         }
-        debug!("After init_ports loop");
     }
 }
 
@@ -285,6 +286,8 @@ impl Drop for AhciDevice2
 // empty space
 // CLB  at offset 1024, length 1024
 
+// Based on the Layout above, this can grow up to 256 bytes
+// the current edit would make it 48 (+8) bytes
 pub struct AhciPort2
 {
     pub hba_idx: usize,
@@ -295,7 +298,10 @@ pub struct AhciPort2
     pub fb: &'static mut ReceivedFis,
     /// 1 to 32 (inclusive)
     pub cmd_slot_count: u8,
+    pub lba: u8,
     pub is_64bit_aware: bool,
+    // TODO: What Size?
+    pub size: u64,
 }
 
 impl AhciPort2
@@ -386,7 +392,56 @@ impl AhciPort2
             port.fb.set(fb64 as u32);
             port.fbu.set((fb64 >> 32) as u32);
 
+            // Power On Device if required
+            if port.cmd.get_cpd() && port.cmd.get_cps()
+            {
+                unsafe { port.cmd.set_pod(true) };
+                busy_sleep(5); // Nothing in the docs says this, I'm just thinking it is a good idea without something to test.
+            }
+            assert!(port.cmd.get_pod(), "Power On Device should be true");
+
+            // Spin Up Device if required
+            if ahci.abar_ptr.ghc.cap.get_sss() && !port.cmd.get_sud()
+            {
+                unsafe { port.cmd.set_sud(true) };
+            }
+            assert!(port.cmd.get_sud(), "Spin Up Device should be true");
+
+            // 10.10.1
+            // Reset Port by setting PxSCTL.DET to 1
+            port.sctl.set(port.sctl.get() & !0xfu32 | 1u32);
+            busy_sleep(5); // Docs: at least 1 ms
+            // While PxSCTL.DET is 1, the HBA sends continiously an COMRESET.
+            // We don't want that.
+            port.sctl.set(port.sctl.get() & !0xfu32);
+
+            busy_sleep(5); // Just In Case, give time to hardware to react
+            while port.tfd.get() & 0xf == 0x8 // BUSY
+            {
+                core::hint::spin_loop();
+            }
+            // wait for up to a second for PxSSTS to update
+            // for _ in 0..10
+            // {
+            //     if port.ssts.get() & 0xf == 3
+            //     {
+            //         break;
+            //     }
+            //     else
+            //     {
+            //         busy_sleep(100);
+            //     }
+            // }
+            debug!("Initial:  PxSSTS.DET = {:x}, PxSIG: {:x}", port.ssts.get() & 0xf, port.sig.get());
+            if port.ssts.get() & 0xf != 3
+            {
+                return None;
+            }
+            // port.serr.set(0x07_ff_0f_03);
+
             port.cmd.set_fre(true);
+            busy_sleep(5); // Allow time for communications to happen
+            debug!("After Recv: PxSSTS.DET = {:x}, PxSIG: {:x}", port.ssts.get() & 0xf, port.sig.get());
 
             // Clear SATA Errors & Diagnostics
             // port.serr.set(0xff_ff_ff_ff);
@@ -411,13 +466,20 @@ impl AhciPort2
             port.ie.set_ipms(true);
 
             // Receive Interrupts, a fis was received from the device
-            port.ie.set_sdbs(true);
-            port.ie.set_dss(true);
-            port.ie.set_pss(true);
-            port.ie.set_dhrs(true);
+            // port.ie.set_sdbs(true);
+            // port.ie.set_dss(true);
+            // port.ie.set_pss(true);
+            // port.ie.set_dhrs(true); // this line seems to be the only relevant one
 
             // Start the Port
-            // port.cmd.set_st(true);
+            port.cmd.set_st(true);
+
+            // 0xf Mask: DET (Detection)
+            // 3: Present & Communicating
+            // if port.ssts.get() & 0xf != 3
+            // {
+            //     assert!(Self::stop_impl(port), "Port not stopped");
+            // }
         }
 
         unsafe {
@@ -613,25 +675,70 @@ impl AhciPort2
         fis.countl.set(1);
 
         let is_ready = unsafe { self.handle_fis(hba, &mut buffer as *mut _ as u64, buffer_len as u64, &fis) };
-        if is_ready
+        if let Some(command_slot) = is_ready
         {
-            Self::start_impl(&mut hba.ports[self.hba_port_idx]);
+            // I was right, CI has to be set, after PxCMD.ST is set to 1.
+            // Why is my laptop having problems with my old code then?
+            // Do I need to allocate and initialize PRTDLs, even when the command is not issued?
+            // Self::start_impl(&mut hba.ports[self.hba_port_idx]);
+
+            debug!("Waiting for CI to clear");
+            while hba.ports[self.hba_port_idx].ci.get() & (1u32 << command_slot) != 0
+            {
+                // print!(".");
+                core::hint::spin_loop();
+            }
+            debug!("Done");
+
+            // for (i, value) in buffer.iter().enumerate()
+            // {
+            //     if i % 8 == 0
+            //     {
+            //         println!();
+            //     }
+            //     print!("{:04x} ", value);
+            // }
+            // println!();
+            // println!("{}", self.clb[command_slot as usize].get_prdbc());
+
+            // From here to the end of the containing if let Some... Taken from redoxOS-rs
+            let sectors =
+                buffer[100] as u64
+                | ((buffer[101] as u64) << 16)
+                | ((buffer[102] as u64) << 32)
+                | ((buffer[103] as u64) << 48);
+
+            if sectors == 0
+            {
+                // Could this be tested for with HBA.CAP.S64A?
+                // Instead of checking if sectors above is 0?
+                let sectors = buffer[60] as u64 | ((buffer[61] as u64) << 16);
+                // (28, sectors * 512)
+                println!("HELLO (28, {})", sectors * 512);
+            }
+            else
+            {
+                // (48, sectors * 512)
+                println!("HELLO (28, {})", sectors * 512);
+            }
         }
     }
 
     /// Unsafe Note: buffer must be writable, if data from the device is read.
     /// The buffer_len must be the size of the buffer.
     /// The buffer size must be divisible by 2, the buffer aligned by 2.
-    unsafe fn handle_fis(&mut self, hba: &mut HbaMemory, buffer: u64, buffer_len: u64, fis: &RegH2D) -> bool
+    unsafe fn handle_fis(&mut self, hba: &mut HbaMemory, buffer: u64, buffer_len: u64, fis: &RegH2D) -> Option<u8>
     {
         assert_eq!(buffer & 1, 0, "buffer must be 2 byte aligned.");
         assert_eq!(buffer_len & 1, 0, "buffer_len must be a multiple of 2");
         assert_eq!(buffer_len & 0x00_3f_ff_ff, buffer_len, "buffer_len is restricted to the first 22 bits");
 
+        let buffer_physical = paging::get_physical_address::<BasePageSize>(buffer as usize);
+
         let port = &mut hba.ports[self.hba_port_idx];
-        let slot_num = match Self::find_empty_slot(port, self.cmd_slot_count as usize)
+        let slot_num = match Self::find_empty_slot(port, self.cmd_slot_count as usize - 1)
         {
-            None => return false,
+            None => return None,
             Some(it) => it,
         };
 
@@ -648,7 +755,7 @@ impl AhciPort2
             fis.copy_into(&mut cmd_tbl.cfis);
             cmd_tbl.prdt[0].set(
                 PhysicalRegionDescriptorTable::new(
-                    buffer,
+                    buffer_physical as u64,
                     false,
                     (buffer_len - 1) as u32)) // Test: redox-os effectively adds 1 (in the fis code), i subtract one.
         }
@@ -675,13 +782,13 @@ impl AhciPort2
             core::hint::spin_loop();
         }
 
-        true
+        Some(slot_num)
     }
 
     fn find_empty_slot(this: &PortRegister, cmd_slot_count: usize) -> Option<u8>
     {
         // Remember: the hba has a value in 0..=31, I use a value in 1..=32
-        debug_assert!(cmd_slot_count <= 32);
+        debug_assert!(cmd_slot_count < 32);
         // let slots = self.cmd_slot_count;
         let options = this.ci.get() | this.sact.get();
         for i in 0..cmd_slot_count
@@ -698,46 +805,52 @@ impl AhciPort2
 #[doc(hidden)]
 pub fn on_interrupt(_num: u8)
 {
-    // Big Problem: My Entry Point AHCI_DEVICES may be locked.
-    // When this happens, this function will deadlock.
-    // IT TOOK ME A FOXING DAY TO FIGURE THIS ONE OUT.
-    // I'm so stupid.
-    
-    super::on_each_device(|i, it| {
+    let mut someone_errored = false;
+
+    super::on_each_device(|i, hba| {
 
 		println!("INTERRUPT HBA {}", i);
 		println!(
 			"- BOH {}, NCS {}, NP  {}",
-			it.abar_ptr.ghc.cap2.get_boh(),
-			it.abar_ptr.ghc.cap.get_ncs_adjusted(),
-			it.abar_ptr.ghc.cap.get_np_adjusted());
-		println!("- IS {:032b}, PI  {:032b}", it.abar_ptr.ghc.is, it.abar_ptr.ghc.pi);
-		for (j, port) in it.ports.iter().enumerate()
+			hba.abar_ptr.ghc.cap2.get_boh(),
+			hba.abar_ptr.ghc.cap.get_ncs_adjusted(),
+			hba.abar_ptr.ghc.cap.get_np_adjusted());
+		println!("- IS {:032b}, PI  {:032b}", hba.abar_ptr.ghc.is, hba.abar_ptr.ghc.pi);
+        let mut all_none = true;
+		for (j, port) in hba.ports.iter().enumerate()
 		{
 			if let Some(port) = port
 			{
+                all_none = false;
 				println!("- Port {}", j);
 				println!(
 					"  - {}, {}, CR {}, FR {}",
 					port.hba_idx == i,
 					port.hba_port_idx == j,
-					it.abar_ptr.ports[port.hba_port_idx].cmd.get_cr(),
-					it.abar_ptr.ports[port.hba_port_idx].cmd.get_fr());
-				println!("  - CI  {}, CCS {}", it.abar_ptr.ports[port.hba_port_idx].ci.get(), it.abar_ptr.ports[port.hba_port_idx].cmd.get_ccs());
+					hba.abar_ptr.ports[port.hba_port_idx].cmd.get_cr(),
+					hba.abar_ptr.ports[port.hba_port_idx].cmd.get_fr());
+				println!("  - CI  {}, CCS {}", hba.abar_ptr.ports[port.hba_port_idx].ci.get(), hba.abar_ptr.ports[port.hba_port_idx].cmd.get_ccs());
 				println!(
 					"  - STS {:x}, SSTS {:03x}, SIG {:08x}, SERR {:08x}",
-					it.abar_ptr.ports[port.hba_port_idx].tfd.get() & 0xf,
-					it.abar_ptr.ports[port.hba_port_idx].ssts.get(),
-					it.abar_ptr.ports[port.hba_port_idx].sig.get(),
-					it.abar_ptr.ports[port.hba_port_idx].serr.get());
+					hba.abar_ptr.ports[port.hba_port_idx].tfd.get() & 0xf,
+					hba.abar_ptr.ports[port.hba_port_idx].ssts.get(),
+					hba.abar_ptr.ports[port.hba_port_idx].sig.get(),
+					hba.abar_ptr.ports[port.hba_port_idx].serr.get());
 				
+                if hba.abar_ptr.ports[port.hba_port_idx].is.get_raw() & 0xfd_00_00_00 != 0
+                {
+                    println!("Hba <TODO> Port {} throw an error", port.hba_port_idx);
+                    someone_errored = true;
+                }
 			}
 		}
-        loop {
-
-            unsafe { x86::halt() };
-        }
+        println!("All None? {}", all_none);
 	});
+
+    if someone_errored
+    {
+        panic!("A Port reported an error (unhandled)")
+    }
 }
 
 static AHCI_DEVICES: Spinlock<Vec<AhciDevice2>> = Spinlock::new(Vec::new());
@@ -758,6 +871,13 @@ pub fn with_ahci_devices<F>(mut func: F)
     // Why not IrqSafeSpinlock? Because I need at least PIT
     let lock = AHCI_DEVICES.lock();
     func(lock.as_ref());
+
+    // TODO: REMOVE
+    // let last_irq = crate::arch::irq::irq_nested_disable();
+    // loop {
+    //     unsafe { x86::halt() };
+    // }
+    // crate::arch::irq::irq_nested_enable(last_irq);
 
     unsafe {
 

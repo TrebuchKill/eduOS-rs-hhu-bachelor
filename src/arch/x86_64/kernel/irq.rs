@@ -349,21 +349,21 @@ extern "x86-interrupt" fn timer_handler(stack_frame: ExceptionStackFrame) {
 // QEMU is by default 11 (if I recall correctly, at least with this setup), which is what i am setting anyway.
 // According to https://os.phil-opp.com/hardware-interrupts/ Interrupts 10 & 11 are free for everything.
 // According to https://wiki.osdev.org/Interrupts#General_IBM-PC_Compatible_Interrupt_Information Interrupt 9 is also free.
-extern "x86-interrupt" fn unhandled_irq2_9(_stack_frame: ExceptionStackFrame)
+extern "x86-interrupt" fn ahci_handler_9(_stack_frame: ExceptionStackFrame)
 {
 	crate::drivers::on_interrupt(9);
 	send_eoi_to_slave();
 	send_eoi_to_master();
 }
 
-extern "x86-interrupt" fn unhandled_irq2_10(_stack_frame: ExceptionStackFrame)
+extern "x86-interrupt" fn ahci_handler_10(_stack_frame: ExceptionStackFrame)
 {
 	crate::drivers::on_interrupt(10);
 	send_eoi_to_slave();
 	send_eoi_to_master();
 }
 
-extern "x86-interrupt" fn ahci_handler(_stack_frame: ExceptionStackFrame)
+extern "x86-interrupt" fn ahci_handler_11(_stack_frame: ExceptionStackFrame)
 {
 	crate::drivers::on_interrupt(11);
 	send_eoi_to_slave();
@@ -678,7 +678,7 @@ impl InteruptHandler {
 		}
 
 		self.idt[43] = IdtEntry::new(
-			VAddr::from_usize(ahci_handler as usize),
+			VAddr::from_usize(ahci_handler_11 as usize),
 			KERNEL_CODE_SELECTOR,
 			Ring::Ring0,
 			Type::InterruptGate,
@@ -687,14 +687,14 @@ impl InteruptHandler {
 		// I don't know why, but my laptop ignores my overwrite of the interrupt line
 		// I am probably missing something
 		self.idt[41] = IdtEntry::new(
-			VAddr::from_usize(ahci_handler as usize),
+			VAddr::from_usize(ahci_handler_9 as usize),
 			KERNEL_CODE_SELECTOR,
 			Ring::Ring0,
 			Type::InterruptGate,
 			0);
 
 		self.idt[42] = IdtEntry::new(
-			VAddr::from_usize(ahci_handler as usize),
+			VAddr::from_usize(ahci_handler_10 as usize),
 			KERNEL_CODE_SELECTOR,
 			Ring::Ring0,
 			Type::InterruptGate,

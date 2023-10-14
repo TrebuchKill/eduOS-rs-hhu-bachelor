@@ -552,7 +552,7 @@ pub fn init()
             {
                 devices.push(it);
             }
-            println!("After AhciInit");
+            // println!("After AhciInit");
         });
     });
     /*let mut devices = DEVICES.lock();
@@ -578,8 +578,8 @@ pub fn init()
     });*/
 }
 
-pub fn on_each_device<F>(fun: F)
-    where F: Fn(usize, &AhciDevice2) -> ()
+pub fn on_each_device<F>(mut fun: F)
+    where F: FnMut(usize, &AhciDevice2) -> ()
 {
     // let devs = DEVICES.lock();
     with_ahci_devices(|devs| {
