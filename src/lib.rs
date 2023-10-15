@@ -25,6 +25,7 @@ extern crate num_traits;
 use crate::consts::HEAP_SIZE;
 #[cfg(target_arch = "x86_64")]
 use arch::processor::*;
+use arch::x86_64::kernel::busy_sleep;
 use core::panic::PanicInfo;
 pub use logging::*;
 use simple_chunk_allocator::{heap, heap_bitmap, GlobalChunkAllocator, PageAligned};
@@ -99,19 +100,19 @@ pub extern "C" fn test_c()
 
 pub fn test()
 {
-	use alloc::vec::Vec;
-	use drivers::pci::devices::{Device, CommonHeader};
+//	use alloc::vec::Vec;
+//	use drivers::pci::devices::{Device, CommonHeader};
 
-	let mut pci_count = 0;
-	let mut generic_count = 0;
-	let mut card_count = 0;
-	let mut bridge_count = 0;
-	let mut ahci_count = 0;
+//	let mut pci_count = 0;
+//	let mut generic_count = 0;
+//	let mut card_count = 0;
+//	let mut bridge_count = 0;
+//	let mut ahci_count = 0;
 
-	drivers::pci::on_each_device_mut(|_, _| pci_count += 1);
-	drivers::pci::on_each_generic_device_mut(|_, _| generic_count += 1);
-	drivers::pci::on_each_pci_bridge_device_mut(|_, _| bridge_count += 1);
-	drivers::pci::on_each_card_bridge_device_mut(|_, _| card_count += 1);
+//	drivers::pci::on_each_device_mut(|_, _| pci_count += 1);
+//	drivers::pci::on_each_generic_device_mut(|_, _| generic_count += 1);
+//	drivers::pci::on_each_pci_bridge_device_mut(|_, _| bridge_count += 1);
+//	drivers::pci::on_each_card_bridge_device_mut(|_, _| card_count += 1);
 
 	/*drivers::pci::on_each_generic_device(|it|
 	{
@@ -121,7 +122,7 @@ pub fn test()
 		}
 	});*/
 
-	drivers::ahci::on_each_device_mut(|_, _| ahci_count += 1);
+//	drivers::ahci::on_each_device_mut(|_, _| ahci_count += 1);
 //	drivers::ahci::on_each_device(|i, it| {
 //
 //		println!("HBA {}", i);
@@ -154,7 +155,7 @@ pub fn test()
 //		}
 //	});
 
-	println!("TEST ({}, {}, {}, {}, {})", pci_count, generic_count, card_count, bridge_count, ahci_count);
+//	println!("TEST ({}, {}, {}, {}, {})", pci_count, generic_count, card_count, bridge_count, ahci_count);
 
 	/*let devices = pci::scan_bus();
 	println!("Found {} PCI Device(s)", devices.len());
@@ -167,6 +168,23 @@ pub fn test()
 	{
 		dev.debug_print();
 	}*/
+
+	let mut buffer = [0u16; 256];
+	drivers::ahci::on_each_device_mut(|i, hba| {
+
+		for (j, port) in hba.ports.iter_mut().enumerate()
+		{
+			if let Some(ref mut port) = port
+			{
+				if let Some(bytes_read) = port.read_u16(hba.abar_ptr, 0, &mut buffer)
+				{
+					println!("HBA: {}, Port: {}, Bytes Read: {}, Last Value: {}", i, j, bytes_read, buffer[bytes_read / 2 - 1]);
+				}
+			}
+		}
+		// TODO: REMOVE
+		busy_sleep(2000);
+	});
 }
 
 /// This function is called on panic.

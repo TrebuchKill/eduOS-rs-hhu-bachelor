@@ -153,6 +153,12 @@ pub struct CommandTable2
 
 impl CommandTable2
 {
+    /// The count of PRDT Entries supported by AHCI.
+    pub const MAX_PRDT_ENTRIES: u32 = 65535;
+
+    /// The count of PRDT Entries fitting onto one page alongside the CommandTable
+    pub const MAX_PRDT_ENTRIES_ON_ONE_PAGE: u32 = 248;
+
     pub fn zeroed(&mut self)
     {
         for it in &mut self.cfis
@@ -180,6 +186,8 @@ pub struct CommandTable2Ptr(*mut CommandTable2);
 
 impl CommandTable2Ptr
 {
+    pub const MAX_PRDT_ENTRIES: u32 = CommandTable2::MAX_PRDT_ENTRIES_ON_ONE_PAGE;
+
     pub fn new(num_prdt: u32) -> Self
     {
         use crate::arch::x86_64::mm::{

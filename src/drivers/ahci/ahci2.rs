@@ -462,16 +462,16 @@ impl AhciPort2
             // Right Hand Side: Is the Signature hinting at a SATA device?
             if port.ssts.get() & 0xf != 3 || port.sig.get() != 0x01_01
             {
-                debug!("Cleanup Second Chance (timeout after 60 seconds).");
-                if Self::stop_impl(port)
-                {
-                    debug!("ST: {}, CR: {}, FRE: {}, FR: {}", port.cmd.get_st(), port.cmd.get_cr(), port.cmd.get_fre(), port.cmd.get_fr());
-                    port.fb.set(0);
-                    port.fbu.set(0);
-                    port.clb.set(0);
-                    port.clbu.set(0);
-                    Self::deallocate(this);
-                }
+                // debug!("Cleanup Second Chance (timeout after 60 seconds).");
+                // if Self::stop_impl(port)
+                // {
+                //     debug!("ST: {}, CR: {}, FRE: {}, FR: {}", port.cmd.get_st(), port.cmd.get_cr(), port.cmd.get_fre(), port.cmd.get_fr());
+                //     port.fb.set(0);
+                //     port.fbu.set(0);
+                //     port.clb.set(0);
+                //     port.clbu.set(0);
+                //     Self::deallocate(this);
+                // }
                 return None;
             }
 
@@ -697,11 +697,77 @@ impl AhciPort2
         assert_eq!(buffer.len() % 512, 0, "The buffer must have a size which is a multiple of 512.");
     }
 
-    pub fn read(&mut self, hba: &mut HbaMemory, buffer: &mut [u8])
+    // OSDevWiki has the following arguments:
+    // count: count of sectors to read (fis: countl, counth)
+    // "starth:startl": first sector to read (fis: lba address)
+    // buf: the target buffer for data
+    pub fn read_raw(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: *mut u8, buffer_len: usize) -> Option<usize>
     {
+        let sector_count = buffer_len as u64 / 512;
         // TODO: validate assumption
-        // If this assumption is true, why? Backwards compatibility?
-        assert_eq!(buffer.len() % 512, 0, "The buffer must have a size which is a multiple of 512.");
+        // Why is a sector 512? Backwards compatibility?
+        // assert_eq!(buffer.len() % 512, 0, "The buffer must have a size which is a multiple of 512.");
+        assert_eq!(buffer_len & 0x01_ff, 0, "The buffer must have a size which is a multiple of 512.");
+        assert_eq!(buffer as *mut _ as *mut () as usize & 1, 0, "The buffer must be 2-byte aligned");
+        assert!(sector_count < 0x01_00_00, "Sector Count must be less than 65536");
+        // Instead of &mut [u8], maybe an *mut u8? Or *mut u16?
+
+        let mut fis = RegH2D::default();
+        fis.pmport_cc.set(0x80);
+        fis.command.set(Self::ATA_CMD_READ_WRITE_EXT);
+
+        fis.lba0.set(first_sector as u8);
+        fis.lba1.set((first_sector >> 8) as u8);
+        fis.lba2.set((first_sector >> 16) as u8);
+        fis.lba3.set((first_sector >> 24) as u8);
+        fis.lba4.set((first_sector >> 32) as u8);
+        fis.lba5.set((first_sector >> 40) as u8);
+
+        fis.countl.set(sector_count as u8);
+        fis.counth.set((sector_count >> 8) as u8);
+
+        fis.device.set(0x40); // Quote from OSDevWiki: LBA Mode
+
+        if let Some((slot, _prdt_count)) =
+            unsafe { self.handle_fis(hba, false, buffer as *mut () as u64, buffer_len as u64, &fis) }
+        {
+            debug!(
+                "Waiting for CI to clear and Port to be not busy, CI Clear? {}, TFD Clear? {}",
+                hba.ports[self.hba_port_idx].ci.get() & (1u32 << slot) == 0,
+                hba.ports[self.hba_port_idx].tfd.get() & 0x88 == 0);
+            while hba.ports[self.hba_port_idx].ci.get() & (1u32 << slot) != 0
+            {
+                core::hint::spin_loop();
+            }
+            debug!("Waiting for CI completed");
+            while hba.ports[self.hba_port_idx].tfd.get() & 0x88 != 0
+            {
+                core::hint::spin_loop();
+            }
+            debug!("Done, CI Clear? {}, TFD Clear? {}",
+                hba.ports[self.hba_port_idx].ci.get() & (1u32 << slot) == 0,
+                hba.ports[self.hba_port_idx].tfd.get() & 0x88 == 0);
+            let it = self.clb[slot as usize].get_prdbc();
+            Some(it as usize)
+        }
+        else
+        {
+            None
+        }
+    }
+
+    pub fn read_u8(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: &mut [u8]) -> Option<usize>
+    {
+        let buffer_len = buffer.len();
+        let buffer = buffer as *mut _ as *mut u8;
+        self.read_raw(hba, first_sector, buffer, buffer_len)
+    }
+
+    pub fn read_u16(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: &mut [u16]) -> Option<usize>
+    {
+        let buffer_len = buffer.len() * 2; // 2 = size of u16
+        let buffer = buffer as *mut _ as *mut u8;
+        self.read_raw(hba, first_sector, buffer, buffer_len)
     }
 
     /// Sets self.lba and self.size to the values the device returns on a ATA_CMD_IDENTIFY.
@@ -722,21 +788,22 @@ impl AhciPort2
         self.lba = 0;
         self.size = 0;
 
-        let is_ready = unsafe { self.handle_fis(hba, &mut buffer as *mut _ as u64, buffer_len as u64, &fis) };
-        if let Some(command_slot) = is_ready
+        let is_ready = unsafe { self.handle_fis(hba, false, &mut buffer as *mut _ as u64, buffer_len as u64, &fis) };
+        if let Some((command_slot, prdt_count)) = is_ready
         {
             // I was right, CI has to be set, after PxCMD.ST is set to 1.
             // Why is my laptop having problems with my old code then?
             // Do I need to allocate and initialize PRTDLs, even when the command is not issued?
             // Self::start_impl(&mut hba.ports[self.hba_port_idx]);
+            assert_eq!(prdt_count, 1, "prdt_count is not 1");
 
             debug!("Waiting for CI to clear");
             while hba.ports[self.hba_port_idx].ci.get() & (1u32 << command_slot) != 0
             {
-                // print!(".");
                 core::hint::spin_loop();
             }
             debug!("Done");
+            assert_eq!(self.clb[command_slot as usize].get_prdbc(), 512, "[Identify] Expected to receive 512 bytes");
 
             // for (i, value) in buffer.iter().enumerate()
             // {
@@ -769,16 +836,154 @@ impl AhciPort2
                 self.lba = 48;
                 self.size = sectors * 512;
             }
+            debug!("LBA Bits: {}, Size: {} Bytes ({} GiB)", self.lba, self.size, self.size / 1073741824u64);
+            // TODO: Remove (for laptop reading)
+            busy_sleep(5000);
         }
     }
 
     /// Unsafe Note: buffer must be writable, if data from the device is read.
     /// The buffer_len must be the size of the buffer.
+    /// The buffer size must be divisible by 512, the buffer aligned by 2.
+    /// 
+    /// Returns: Slot, PRDT Entry Count
+    unsafe fn handle_fis(
+        &mut self,
+        hba: &mut HbaMemory,
+        write: bool,
+        buffer: u64,
+        buffer_len: u64,
+        fis: &RegH2D)
+        -> Option<(u8, u32)>
+    {
+        // Thought about assert, as it is probably not intended
+        debug_assert_ne!(buffer, 0);
+        debug_assert_ne!(buffer_len, 0);
+        if buffer == 0 || buffer_len == 0
+        {
+            return None;
+        }
+
+        assert_eq!(buffer & 1, 0, "buffer must be 2 byte aligned.");
+        // assert_eq!(buffer_len & 1, 0, "buffer_len must be a multiple of 2");
+        assert_eq!(buffer_len & 0x1_ff, 0, "The buffer length must be a multiple of 512");
+        assert_eq!(buffer_len & 0x00_3f_ff_ff, buffer_len, "buffer_len is restricted to the first 22 bits");
+
+        let buffer_physical = paging::get_physical_address::<BasePageSize>(buffer as usize);
+        assert_eq!(buffer_physical & 1, 0, "buffer_physical must be 2 byte aligned.");
+
+        let port = &mut hba.ports[self.hba_port_idx];
+        let slot_num = match Self::find_empty_slot(port, self.cmd_slot_count as usize - 1)
+        {
+            None => return None,
+            Some(it) => it,
+        };
+        // Count of PRDT using 8KiB. OsDevWiki does not explain, why they use 8KiB, while the AHCI Docs say up to 4 MiB. Maybe standard version?
+        let full_prdt_count = buffer_len >> 13;
+        let partial_prdt_size = buffer_len & 0x1f_ff;
+        let total_prdt_count = full_prdt_count + if partial_prdt_size != 0 { 1 } else { 0 };
+        assert!(total_prdt_count < CommandTable2Ptr::MAX_PRDT_ENTRIES as u64);
+
+        // Purpose
+        // a) don't have this long paging::get_physical_... line inside the loop, where I initilize the prdt entries
+        // b) Fail fast: if any of these address is not mapped (buffer smaller than argument reports), the function will panic
+        let addresses = {
+            
+            let mut addresses = [0u64; CommandTable2Ptr::MAX_PRDT_ENTRIES as usize];
+            for i in 0..total_prdt_count
+            {
+                addresses[i as usize] =
+                    // The function should keep the offset (relative to page boundary)
+                    // What about integer overflow?
+                    paging::get_physical_address::<BasePageSize>((buffer + (i * 8192)) as usize) as u64;
+            }
+            addresses
+        };
+
+        debug!("Using slot {} and {} PRDT Entries", slot_num, total_prdt_count);
+        let cmd_header = &mut self.clb[slot_num as usize];
+        cmd_header.reset();
+        cmd_header.set_write(write);
+        cmd_header.set_prdtl(total_prdt_count as u16); // Safe thanks to CommanTable2Ptr::MAX_PRDT_ENTRIES
+        cmd_header.set_cfl(
+            (core::mem::size_of::<RegH2D>() / core::mem::size_of::<u32>()) as u8);
+
+        let mut cmd_table = CommandTable2Ptr::new(1);
+        {
+            let cmd_tbl = cmd_table.as_mut();
+            fis.copy_into(&mut cmd_tbl.cfis);
+            for i in 0..full_prdt_count
+            {
+                cmd_tbl.prdt[usize::try_from(i).unwrap()].set(
+                    PhysicalRegionDescriptorTable::new(
+                        addresses[i as usize],
+                        false,
+                        8191)); // Yes, it has to be 8192 - 1 (0x20_00 - 1)
+            }
+            if partial_prdt_size != 0
+            {
+                cmd_tbl.prdt[full_prdt_count as usize].set(
+                    PhysicalRegionDescriptorTable::new(
+                        addresses[full_prdt_count as usize],
+                        false,
+                        (partial_prdt_size - 1) as u32
+                    ));
+            }
+        }
+
+        let address = paging::get_physical_address::<BasePageSize>(cmd_table.as_usize()) as u64;
+        let addr_lo = address as u32;
+        let addr_hi = (address >> 32) as u32;
+        cmd_header.set_ctba(addr_lo);
+        if hba.ghc.cap.get_s64a()
+        {
+            cmd_header.set_ctbau(addr_hi);
+        }
+        else
+        {
+            assert_eq!(addr_hi, 0, "Hardware does not 64 bit, while we have a 64 bit address");
+        }
+
+        debug!("Pre-Submit wait for not busy (no timeout)");
+        while port.tfd.get() & 0x88 != 0
+        {
+            core::hint::spin_loop();
+        }
+
+        port.ci.set(1u32 << slot_num);
+
+        // ATA_DEV_BUSY (0x80) | ATA_DEV_DRQ (0x08)
+        debug!("Post-Submit wait for done (no timeout)");
+        let mut start = crate::arch::x86_64::kernel::get_ticks();
+        while port.tfd.get() & 0x88 != 0
+        {
+            core::hint::spin_loop();
+            let cur = crate::arch::x86_64::kernel::get_ticks();
+            let diff = cur - start;
+            if diff > 10_000
+            {
+                start = cur;
+                println!(
+                    "TFD: {:02x}, CI: {:08x}, IS: {:08x}, SERR: {:08x}, SACT: {:08x}",
+                    port.tfd.get() & 0x88,
+                    port.ci.get() & (1u32 << slot_num),
+                    port.is.get_raw(),
+                    port.serr.get(),
+                    port.sact.get());
+            }
+        }
+
+        Some((slot_num, total_prdt_count as u32))
+    }
+
+    /// Unsafe Note: buffer must be writable, if data from the device is read.
+    /// The buffer_len must be the size of the buffer.
     /// The buffer size must be divisible by 2, the buffer aligned by 2.
-    unsafe fn handle_fis(&mut self, hba: &mut HbaMemory, buffer: u64, buffer_len: u64, fis: &RegH2D) -> Option<u8>
+    /*unsafe fn handle_fis_ident_only(&mut self, hba: &mut HbaMemory, buffer: u64, buffer_len: u64, fis: &RegH2D) -> Option<u8>
     {
         assert_eq!(buffer & 1, 0, "buffer must be 2 byte aligned.");
-        assert_eq!(buffer_len & 1, 0, "buffer_len must be a multiple of 2");
+        // assert_eq!(buffer_len & 1, 0, "buffer_len must be a multiple of 2");
+        assert_eq!(buffer_len & 0x1_ff, 0, "The buffer length must be a multiple of 512");
         assert_eq!(buffer_len & 0x00_3f_ff_ff, buffer_len, "buffer_len is restricted to the first 22 bits");
 
         let buffer_physical = paging::get_physical_address::<BasePageSize>(buffer as usize);
@@ -831,7 +1036,7 @@ impl AhciPort2
         }
 
         Some(slot_num)
-    }
+    }*/
 
     fn find_empty_slot(this: &PortRegister, cmd_slot_count: usize) -> Option<u8>
     {
