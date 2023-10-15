@@ -252,6 +252,7 @@ impl AhciDevice2
 
                 
                 // println!("SSTS {:3x}, SIG {:x}", self.abar_ptr.ports[i as usize].ssts.get(), self.abar_ptr.ports[i as usize].sig.get());
+                // Currently, if self.ports[i] is not None, the value below should be 0x101 (Supposed SATA Signature)
                 match self.abar_ptr.ports[i as usize].sig.get()
                 {
                     // 0x101 SATA
@@ -260,6 +261,8 @@ impl AhciDevice2
                     {
                         port.identify(self.abar_ptr);
                     }
+                    // Signature not initialized, keep quiet
+                    0xff_ff_ff_ff => (),
                     it => debug!("SIG {:x}", it)
                 }
             }
@@ -410,8 +413,8 @@ impl AhciPort2
             // 10.10.1
             // Reset Port by setting PxSCTL.DET to 1
             port.sctl.set(port.sctl.get() & !0xfu32 | 1u32);
-            busy_sleep(5); // Docs: at least 1 ms
-            // While PxSCTL.DET is 1, the HBA sends continiously an COMRESET.
+            busy_sleep(5); // Docs: wait at least 1 ms
+            // While PxSCTL.DET is 1, the HBA sends continiously an "COMRESET".
             // We don't want that.
             port.sctl.set(port.sctl.get() & !0xfu32);
 
@@ -435,6 +438,17 @@ impl AhciPort2
             debug!("Initial:  PxSSTS.DET = {:x}, PxSIG: {:x}", port.ssts.get() & 0xf, port.sig.get());
             if port.ssts.get() & 0xf != 3
             {
+                debug!("Port Init Cleanup First Chance (timeout after 60 seconds).");
+                // Ensure Port is stopped, even though it should be at this point
+                if Self::stop_impl(port)
+                {
+                    debug!("ST: {}, CR: {}, FRE: {}, FR: {}", port.cmd.get_st(), port.cmd.get_cr(), port.cmd.get_fre(), port.cmd.get_fr());
+                    port.fb.set(0);
+                    port.fbu.set(0);
+                    port.clb.set(0);
+                    port.clbu.set(0);
+                    Self::deallocate(this);
+                }
                 return None;
             }
             // port.serr.set(0x07_ff_0f_03);
@@ -442,6 +456,24 @@ impl AhciPort2
             port.cmd.set_fre(true);
             busy_sleep(5); // Allow time for communications to happen
             debug!("After Recv: PxSSTS.DET = {:x}, PxSIG: {:x}", port.ssts.get() & 0xf, port.sig.get());
+
+            // Original Idea: Check if a SATA drive is at the port, and if not, free memory
+            // Left Hand Side: Is Physical Communications Established to an connected device?
+            // Right Hand Side: Is the Signature hinting at a SATA device?
+            if port.ssts.get() & 0xf != 3 || port.sig.get() != 0x01_01
+            {
+                debug!("Cleanup Second Chance (timeout after 60 seconds).");
+                if Self::stop_impl(port)
+                {
+                    debug!("ST: {}, CR: {}, FRE: {}, FR: {}", port.cmd.get_st(), port.cmd.get_cr(), port.cmd.get_fre(), port.cmd.get_fr());
+                    port.fb.set(0);
+                    port.fbu.set(0);
+                    port.clb.set(0);
+                    port.clbu.set(0);
+                    Self::deallocate(this);
+                }
+                return None;
+            }
 
             // Clear SATA Errors & Diagnostics
             // port.serr.set(0xff_ff_ff_ff);
@@ -654,25 +686,41 @@ impl AhciPort2
 
 impl AhciPort2
 {
+    const ATA_CMD_IDENTIFY: u8 = 0xEC;
+    const ATA_CMD_READ_WRITE_EXT: u8 = 0x35;
+    const ATA_CMD_WRITE_WRITE_EXT: u8 = 0x25;
+
     pub fn write(&mut self, hba: &mut HbaMemory, buffer: &[u8])
     {
+        // TODO: validate assumption
+        // If this assumption is true, why? Backwards compatibility?
+        assert_eq!(buffer.len() % 512, 0, "The buffer must have a size which is a multiple of 512.");
     }
 
     pub fn read(&mut self, hba: &mut HbaMemory, buffer: &mut [u8])
     {
+        // TODO: validate assumption
+        // If this assumption is true, why? Backwards compatibility?
+        assert_eq!(buffer.len() % 512, 0, "The buffer must have a size which is a multiple of 512.");
     }
 
+    /// Sets self.lba and self.size to the values the device returns on a ATA_CMD_IDENTIFY.
+    /// 
+    /// Failing that, sets the two values to 0.
     pub fn identify(&mut self, hba: &mut HbaMemory)
     {
         let mut buffer = [0u16; 256];
         let buffer_len: usize = core::mem::size_of_val(&buffer);
         // I want bytes, not T (= u16)
-        // Should I either hardcode 512 or use core::mem::size_of::<[u16; 256]>()?
+        // Should I either hardcode 512 or use core::mem::size_of::<[u16; 256]>(), or keep what I have?
 
         let mut fis = RegH2D::default();
-        fis.command.set(0xEC); // ATA_CMD_IDENTIFY
+        fis.command.set(Self::ATA_CMD_IDENTIFY);
         fis.pmport_cc.set(0x80);
         fis.countl.set(1);
+
+        self.lba = 0;
+        self.size = 0;
 
         let is_ready = unsafe { self.handle_fis(hba, &mut buffer as *mut _ as u64, buffer_len as u64, &fis) };
         if let Some(command_slot) = is_ready
@@ -713,13 +761,13 @@ impl AhciPort2
                 // Could this be tested for with HBA.CAP.S64A?
                 // Instead of checking if sectors above is 0?
                 let sectors = buffer[60] as u64 | ((buffer[61] as u64) << 16);
-                // (28, sectors * 512)
-                println!("HELLO (28, {})", sectors * 512);
+                self.lba = 28;
+                self.size = sectors * 512;
             }
             else
             {
-                // (48, sectors * 512)
-                println!("HELLO (28, {})", sectors * 512);
+                self.lba = 48;
+                self.size = sectors * 512;
             }
         }
     }

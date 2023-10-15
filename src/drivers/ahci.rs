@@ -487,7 +487,6 @@ pub fn is_ahci_device<T>(device: &T) -> bool
 
 // Maybe a struct, as an undefined value would be undefined behaviour with this code and with a struct could be correctly rejected as "unknown"?
 // Frame Information Structure
-// TODO: Redo with official specs
 #[repr(u8)]
 pub enum FisType
 {
@@ -508,7 +507,6 @@ pub enum FisType
 
 
 // According to VSCode, this struct has the intended layout (TODO: check this comment for typo)
-// TODO: Makes this struct sense?
 /// The thing, the ABAR (BAR\[5\]) points to
 #[repr(C)]
 pub struct HbaMemory
