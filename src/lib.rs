@@ -178,7 +178,7 @@ pub fn test()
 			{
 				if let Some(bytes_read) = port.read_u16(hba.abar_ptr, 0, &mut buffer)
 				{
-					println!("HBA: {}, Port: {}, Bytes Read: {}, Last Value: {}", i, j, bytes_read, buffer[bytes_read / 2 - 1]);
+					println!("HBA: {}, Port: {}, Bytes Read: {}, Last Value: {}, All zero? {}", i, j, bytes_read, buffer[bytes_read / 2 - 1], buffer.iter().all(|it| *it == 0));
 				}
 			}
 		}

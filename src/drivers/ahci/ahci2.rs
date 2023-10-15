@@ -687,8 +687,8 @@ impl AhciPort2
 impl AhciPort2
 {
     const ATA_CMD_IDENTIFY: u8 = 0xEC;
-    const ATA_CMD_READ_WRITE_EXT: u8 = 0x35;
-    const ATA_CMD_WRITE_WRITE_EXT: u8 = 0x25;
+    const ATA_CMD_READ_EXT: u8 = 0x25;
+    const ATA_CMD_WRITE_EXT: u8 = 0x35;
 
     pub fn write(&mut self, hba: &mut HbaMemory, buffer: &[u8])
     {
@@ -714,7 +714,7 @@ impl AhciPort2
 
         let mut fis = RegH2D::default();
         fis.pmport_cc.set(0x80);
-        fis.command.set(Self::ATA_CMD_READ_WRITE_EXT);
+        fis.command.set(Self::ATA_CMD_READ_EXT);
 
         fis.lba0.set(first_sector as u8);
         fis.lba1.set((first_sector >> 8) as u8);
@@ -744,9 +744,10 @@ impl AhciPort2
             {
                 core::hint::spin_loop();
             }
-            debug!("Done, CI Clear? {}, TFD Clear? {}",
+            debug!("Done, CI Clear? {}, TFD Clear? {}, SACT Clear? {}",
                 hba.ports[self.hba_port_idx].ci.get() & (1u32 << slot) == 0,
-                hba.ports[self.hba_port_idx].tfd.get() & 0x88 == 0);
+                hba.ports[self.hba_port_idx].tfd.get() & 0x88 == 0,
+                hba.ports[self.hba_port_idx].sact.get() & (1u32 << slot) == 0);
             let it = self.clb[slot as usize].get_prdbc();
             Some(it as usize)
         }
@@ -950,6 +951,17 @@ impl AhciPort2
             core::hint::spin_loop();
         }
 
+        println!("Status before CI:");
+        println!("  CI: {:08x}, IS: {:08x}\n  SACT: {:08x}, SERR: {:08x}, TFD: {:08x}",
+            port.ci.get(),
+            port.is.get_raw(),
+            port.sact.get(),
+            port.serr.get(),
+            port.tfd.get());
+        busy_sleep(5000);
+
+        port.is.clear_pss();
+        port.is.clear_dhrs();
         port.ci.set(1u32 << slot_num);
 
         // ATA_DEV_BUSY (0x80) | ATA_DEV_DRQ (0x08)
