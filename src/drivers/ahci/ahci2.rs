@@ -935,7 +935,7 @@ impl AhciPort2
         cmd_header.set_cfl(
             (core::mem::size_of::<RegH2D>() / core::mem::size_of::<u32>()) as u8);
 
-        let mut cmd_table = CommandTable2Ptr::new(1);
+        let mut cmd_table = CommandTable2Ptr::new(total_prdt_count as u32);
         {
             let cmd_tbl = cmd_table.as_mut();
             fis.copy_into(&mut cmd_tbl.cfis);
@@ -984,6 +984,7 @@ impl AhciPort2
             port.sact.get(),
             port.serr.get(),
             port.tfd.get());
+        // TODO: Remove
         busy_sleep(5000);
 
         port.is.clear_pss();
