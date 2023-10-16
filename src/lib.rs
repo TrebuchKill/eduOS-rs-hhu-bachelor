@@ -170,16 +170,36 @@ pub fn test()
 	}*/
 
 	let mut buffer = [0u16; 256];
+	let mut backup = [0u16; 256];
 	drivers::ahci::on_each_device_mut(|i, hba| {
 
 		for (j, port) in hba.ports.iter_mut().enumerate()
 		{
 			if let Some(ref mut port) = port
 			{
-				if let Some(bytes_read) = port.read_u16(hba.abar_ptr, 0, &mut buffer)
+				buffer = [0u16; 256];
+				backup = [0u16; 256];
+				if let Some(bytes_transferred) = port.read_u16(hba.abar_ptr, 0, &mut backup)
 				{
-					println!("HBA: {}, Port: {}, Bytes Read: {}, Last Value: {}, All zero? {}", i, j, bytes_read, buffer[bytes_read / 2 - 1], buffer.iter().all(|it| *it == 0));
+					println!("0: HBA: {}, Port: {}, Bytes Read: {}, Last Value: {}, All zero? {}", i, j, bytes_transferred, backup[bytes_transferred / 2 - 1], backup.iter().all(|it| *it == 0));
 				}
+				if let Some(bytes_transferred) = port.write_u16(hba.abar_ptr, 0, &buffer)
+				{
+					println!("1: HBA: {}, Port: {}, Bytes Written: {}", i, j, bytes_transferred);
+				}
+				if let Some(bytes_transferred) = port.read_u16(hba.abar_ptr, 0, &mut buffer)
+				{
+					println!("2: HBA: {}, Port: {}, Bytes Read: {}, Last Value: {}, All zero? {}", i, j, bytes_transferred, buffer[bytes_transferred / 2 - 1], buffer.iter().all(|it| *it == 0));
+				}
+				if let Some(bytes_transferred) = port.write_u16(hba.abar_ptr, 0, &backup)
+				{
+					println!("3: HBA: {}, Port: {}, Bytes Written: {}", i, j, bytes_transferred);
+				}
+				if let Some(bytes_transferred) = port.read_u16(hba.abar_ptr, 0, &mut buffer)
+				{
+					println!("4: HBA: {}, Port: {}, Bytes Read: {}, Last Value: {}, All zero? {}", i, j, bytes_transferred, buffer[bytes_transferred / 2 - 1], buffer.iter().all(|it| *it == 0));
+				}
+				println!("All Fine: {}", backup.iter().enumerate().all(|(i, v)| buffer[i] == *v));
 			}
 		}
 		// TODO: REMOVE

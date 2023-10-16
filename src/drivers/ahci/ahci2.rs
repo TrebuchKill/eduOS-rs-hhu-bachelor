@@ -690,31 +690,43 @@ impl AhciPort2
     const ATA_CMD_READ_EXT: u8 = 0x25;
     const ATA_CMD_WRITE_EXT: u8 = 0x35;
 
-    pub fn write(&mut self, hba: &mut HbaMemory, buffer: &[u8])
+    pub fn write_raw(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: *const u8, buffer_len: usize) -> Option<usize>
     {
-        // TODO: validate assumption
-        // If this assumption is true, why? Backwards compatibility?
-        assert_eq!(buffer.len() % 512, 0, "The buffer must have a size which is a multiple of 512.");
+        // assert_eq!(buffer.len() % 512, 0, "The buffer must have a size which is a multiple of 512.");
+        unsafe { self.read_write_raw(hba, first_sector, buffer as usize, buffer_len, true) }
+    }
+
+    pub fn read_raw(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: *mut u8, buffer_len: usize) -> Option<usize>
+    {
+        unsafe { self.read_write_raw(hba, first_sector, buffer as usize, buffer_len, false) }
     }
 
     // OSDevWiki has the following arguments:
     // count: count of sectors to read (fis: countl, counth)
     // "starth:startl": first sector to read (fis: lba address)
     // buf: the target buffer for data
-    pub fn read_raw(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: *mut u8, buffer_len: usize) -> Option<usize>
+    /// Unsafe Note: buffer must point to writable memory on a read
+    unsafe fn read_write_raw(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: usize, buffer_len: usize, write: bool) -> Option<usize>
     {
         let sector_count = buffer_len as u64 / 512;
-        // TODO: validate assumption
+
         // Why is a sector 512? Backwards compatibility?
         // assert_eq!(buffer.len() % 512, 0, "The buffer must have a size which is a multiple of 512.");
         assert_eq!(buffer_len & 0x01_ff, 0, "The buffer must have a size which is a multiple of 512.");
-        assert_eq!(buffer as *mut _ as *mut () as usize & 1, 0, "The buffer must be 2-byte aligned");
+        assert_eq!(buffer & 1, 0, "The buffer must be 2-byte aligned");
         assert!(sector_count < 0x01_00_00, "Sector Count must be less than 65536");
         // Instead of &mut [u8], maybe an *mut u8? Or *mut u16?
 
         let mut fis = RegH2D::default();
         fis.pmport_cc.set(0x80);
-        fis.command.set(Self::ATA_CMD_READ_EXT);
+        if write
+        {
+            fis.command.set(Self::ATA_CMD_WRITE_EXT);
+        }
+        else
+        {
+            fis.command.set(Self::ATA_CMD_READ_EXT);
+        }
 
         fis.lba0.set(first_sector as u8);
         fis.lba1.set((first_sector >> 8) as u8);
@@ -729,7 +741,7 @@ impl AhciPort2
         fis.device.set(0x40); // Quote from OSDevWiki: LBA Mode
 
         if let Some((slot, _prdt_count)) =
-            unsafe { self.handle_fis(hba, false, buffer as *mut () as u64, buffer_len as u64, &fis) }
+            unsafe { self.handle_fis(hba, write, buffer as *mut () as u64, buffer_len as u64, &fis) }
         {
             debug!(
                 "Waiting for CI to clear and Port to be not busy, CI Clear? {}, TFD Clear? {}",
@@ -769,6 +781,20 @@ impl AhciPort2
         let buffer_len = buffer.len() * 2; // 2 = size of u16
         let buffer = buffer as *mut _ as *mut u8;
         self.read_raw(hba, first_sector, buffer, buffer_len)
+    }
+
+    pub fn write_u8(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: &[u8]) -> Option<usize>
+    {
+        let buffer_len = buffer.len();
+        let buffer = buffer as *const _ as *const u8;
+        self.write_raw(hba, first_sector, buffer, buffer_len)
+    }
+
+    pub fn write_u16(&mut self, hba: &mut HbaMemory, first_sector: u64, buffer: &[u16]) -> Option<usize>
+    {
+        let buffer_len = buffer.len() * 2; // 2 = size of u16
+        let buffer = buffer as *const _ as *const u8;
+        self.write_raw(hba, first_sector, buffer, buffer_len)
     }
 
     /// Sets self.lba and self.size to the values the device returns on a ATA_CMD_IDENTIFY.
