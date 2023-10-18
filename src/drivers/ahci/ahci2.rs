@@ -212,6 +212,12 @@ impl AhciDevice2
     fn reset(&mut self)
     {
         print!("Resetting HBA");
+        if !self.abar_ptr.ghc.ghc.get_ae()
+        {
+            // Safe: as per definition, if CAP.SAM is set, GHC.AE is readonly 1/true.
+            // If CAP.SAM is not set, only then can it be 0/false. In this case, it is writable.
+            unsafe { self.abar_ptr.ghc.ghc.set_ae(true) };
+        }
         self.abar_ptr.ghc.ghc.set_hr();
         loop 
         {
